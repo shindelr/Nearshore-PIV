@@ -1,2 +1,1 @@
-# Nearshore-Research
-A repository for my nearshore research projects with Professor Wilson.
+A repository for Prof. Wilson's PIV demo implemented in Matlab.
