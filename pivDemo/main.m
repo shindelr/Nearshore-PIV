@@ -63,13 +63,16 @@ v(ibad)=nan;
 clf
 pause(.5)
 subplot(211)
-pcolor(u),sf
+% pcolor(u),sf      % error: var sf undefined? 
+pcolor(u), shading flat
 title('u [pixels/frame]')
 subplot(212)
-pcolor(v),sf
+% pcolor(v),sf
+pcolor(v), shading flat
 title('v [pixels/frame]')
 for i=1:2
   subplot(2,1,i)
   axis equal tight
   ylim([0 200])
+disp('EXITING MAIN')
 end
