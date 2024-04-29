@@ -1,3 +1,5 @@
+% Leads to mnanmean.m (line 95 & 96)
+
 function [u,v]=naninterp2(u,v,mask,xx,yy)
 % function [u,v]=naninterp2(u,v,mask,x,y)
 %

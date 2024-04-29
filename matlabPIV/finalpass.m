@@ -1,3 +1,7 @@
+% Calls xcorrf2 [line 70] should be converted by the time you're here.
+% Calls intpeak.m [line 93],
+
+
 function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
 % function [x,y,u,v,SnR,PeakHeight]=finalpass(A,B,N,ol,idx,idy,Dt)
 %
@@ -141,6 +145,9 @@ for jj=1:((1-ol)*N):sy-N+1
   end
   cj=cj+1;
 end
+
+% This function is slightly different from the one with the same name
+% in firstpass.m. Will need to make a conversion of this one as well.
 
 % now we inline the function XCORRF2 to shave off some time.
 function c = xcorrf2(a,b,pad)

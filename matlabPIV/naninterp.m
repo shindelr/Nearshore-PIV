@@ -1,3 +1,5 @@
+% Leads to naninterp2.m (line 40 & line 84)
+
 function [u,v]=naninterp(u,v,varargin)
 % function [u,v]=naninterp(u,v,method,mask,x,y)
 %

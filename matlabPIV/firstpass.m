@@ -76,6 +76,8 @@ for jj=1:((1-overlap)*N):sy-N+1
   cj=cj+1;
 end
 
+% This function could be a good place to start.
+
 % now we inline the function XCORRF2 to shave off some time.
 function c = xcorrf2(a,b,pad)
 %  c = xcorrf2(a,b)

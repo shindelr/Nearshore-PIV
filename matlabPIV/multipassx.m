@@ -1,3 +1,7 @@
+% Called by main, line 36. 
+% Leads to firstpass.m (line 20), localfilt.m (line 25),
+% naninterp.m (line 26/48), finalpass.m 
+
 function [x,y,u,v,SnR,Pkh]=multipassx(A,B,wins,Dt,overlap,sensit)
 
 A=double(A);
@@ -14,7 +18,7 @@ for i=1:iter-1
   disp(['iter ' num2str(i) ' of ' num2str(iter)])
 
   % PIV
-  [x,y,datax,datay]=firstpass(A,B,wins(i,:),overlap,datax,datay);
+  [x,y,datax,datay]=firstpass(A,B,wins(i,:),overlap,datax,datay);  %two functions to complete in here.
 
   % validation.  TODO, simplify these codes!
   % [datax,datay]=globfilt(x,y,datax,datay,3);
