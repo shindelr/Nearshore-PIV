@@ -44,6 +44,7 @@ for jj=1:((1-overlap)*N):sy-N+1
 
       % normalized correlation
       R=xcorrf2(C,D)/(N*M*stad1*stad2);
+      disp(R);  % For understanding
 
       % find position of maximal value of R
       if size(R,1)==(N-1)
