@@ -44,7 +44,6 @@ for jj=1:((1-overlap)*N):sy-N+1
 
       % normalized correlation
       R=xcorrf2(C,D)/(N*M*stad1*stad2);
-      disp(R);  % For understanding
 
       % find position of maximal value of R
       if size(R,1)==(N-1)
@@ -91,8 +90,14 @@ function c = xcorrf2(a,b,pad)
 %       Author(s): R. Johnson
 %       $Revision: 1.0 $  $Date: 1995/11/27 $
 
+% NOTE FROM RS ---------------------------------------------%
+% Refactored pad to a default true arg in julia, causing 
+% the new version to not have control statements accounting
+% for whether or not pad is necessary. Could be a mistake. 
+% ----------------------------------------------------------%
+
   if nargin==2
-    pad='yes';
+    pad='yes';  % Is pad ever no?
   end
 
   [ma,na] = size(a);
