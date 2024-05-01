@@ -40,6 +40,7 @@ end
 
 
 % ------ TEST ZONE ------
-c = xcorrf2(1);
+
+c = xcorrf2();
 
 % ------ TEST ZONE ------

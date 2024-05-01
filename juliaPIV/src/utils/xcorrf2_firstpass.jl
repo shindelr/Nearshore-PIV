@@ -6,8 +6,8 @@ Two-dimensional cross-correlation using Fourier transforms.
     This routine is functionally equivalent to xcorr2 but usually faster.
     See also XCORR2.
     \n**:params:**\n
-        a: matrix to be compared.\n
-        b: matrix to be compared.\n
+        a: matrix (2D array) to be compared.\n
+        b: matrix ((2D array)) to be compared.\n
         pad: Transform and trim result? Default val is true. Bool flipped to \
          false if padding is not desired.\n
     \n**:return:**\n
@@ -18,6 +18,22 @@ Two-dimensional cross-correlation using Fourier transforms.
     Revision: 1.0   Date: 1995/11/27
 """
 function xcorrf2(a, b, pad=true)
-    
+
+    # Unpack size() return tuple into appropriate variables
+    ma, na = size(a)
+    mb, nb = size(b)
+
+
+
 
 end
+
+# ------ TEST ZONE ------
+a = fill(1.0, (5,5))
+b = fill(1.0, (3,2))
+xcorrf2(a, b)
+
+
+
+
+# ------ TEST ZONE ------
