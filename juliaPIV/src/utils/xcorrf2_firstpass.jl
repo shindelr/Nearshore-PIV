@@ -23,6 +23,17 @@ function xcorrf2(a, b, pad=true)
     ma, na = size(a)
     mb, nb = size(b)
 
+    # Make reverse conjugate of array B
+    rev_b = b[mb:-1:1, nb:-1:1] 
+    b = conj(rev_b);
+
+    # Handle pad?
+    if pad
+        mf = 2^nextpow(2, ma+mb)
+        nf = 2^nextpow(2, na+nb)
+        # LEFT OFF HERE
+    end
+
 
 
 
@@ -30,7 +41,9 @@ end
 
 # ------ TEST ZONE ------
 a = fill(1.0, (5,5))
-b = fill(1.0, (3,2))
+b = [1 2 3;
+    4 5 6;
+    7 8 9]
 xcorrf2(a, b)
 
 

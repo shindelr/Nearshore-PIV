@@ -102,7 +102,6 @@ function c = xcorrf2(a,b,pad)
 
   [ma,na] = size(a);
   [mb,nb] = size(b);
-
   % make reverse conjugate of one array
   b = conj(b(mb:-1:1,nb:-1:1));
   if strcmp(pad,'yes');   % use power of 2 transform lengths
