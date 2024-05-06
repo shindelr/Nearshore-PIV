@@ -91,9 +91,8 @@ function c = xcorrf2(a,b,pad)
 %       $Revision: 1.0 $  $Date: 1995/11/27 $
 
 % NOTE FROM RS ---------------------------------------------%
-% Refactored pad to a default true arg in julia, causing 
-% the new version to not have control statements accounting
-% for whether or not pad is necessary. Could be a mistake. 
+% Refactored pad to a bool arg in julia, simplifies
+%  control statements in new version. Could be a mistake. 
 % ----------------------------------------------------------%
 
   if nargin==2
