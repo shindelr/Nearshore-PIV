@@ -32,14 +32,18 @@ not desired.\n
         println("Reversed Conjugate B:\n", b)
         # Either transform len with pow2 or skip straight to fourier transforms.
         if pad
-            # Slightly different behavior of nextpow() eliminates the need for 2^
+            # Slightly different behavior of nextpow() eliminates the need for 2^ maybe?
             mf = nextpow(2, ma+mb)  
-            # println("MF: ", mf)
+            println("MF: ", mf)
             nf = nextpow(2, na+nb)
-            # println("NF: ", nf)
-            at = fft(b, [mf, nf])  # Opportunity for more efficiency using plan_fft()?
-            # LEFT OFF HERE. ISSUE WITH FFT()
-
+            println("NF: ", nf)
+            b_pad = [b; zeros(eltype(b), mf - nf, size(b, 2))]
+            println("B_pad: ", b_pad)
+            at = fft(b_pad)  # Opportunity for more efficiency using plan_fft()?
+            println("at: ", at)
+            # There may be a big time issue with fft here, can't figure out
+            # how to add the padding.
+            bt = fft(a)
         end
 
 

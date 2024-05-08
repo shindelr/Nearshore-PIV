@@ -24,7 +24,6 @@ end
     disp(nf);
     at = fft2(b,mf,nf);
     disp(at);
-    % c = fft2(b,mf,nf);
     bt = fft2(a,mf,nf);
   end
   % elseif strcmp(pad,'no')
@@ -55,7 +54,9 @@ end
 % ------ TEST ZONE ------
 a = magic(4);
 % b = magic(4);
-b = [1 2 3; 4 5 6; 7 8 9];
+b = [1 2 3; 
+    4 5 6; 
+    7 8 9];
 c = xcorrf2(a, b);
 
 % ------ TEST ZONE ------
