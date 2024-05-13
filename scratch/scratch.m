@@ -19,28 +19,28 @@ end
   disp(b);
   if strcmp(pad,'yes')   % use power of 2 transform lengths
     mf = 2^nextpow2(ma+mb);
-    disp(mf);
+    % disp(mf);
     nf = 2^nextpow2(na+nb);
-    disp(nf);
+    % disp(nf);
     at = fft2(b,mf,nf);
     disp(at);
     bt = fft2(a,mf,nf);
+  elseif strcmp(pad,'no')
+    at = fft2(b);
+    bt = fft2(a);
+    disp(bt);
+  else
+    error('Wrong input to XCORRF2');
   end
-  % elseif strcmp(pad,'no')
-  %   at = fft2(b);
-  %   bt = fft2(a);
-  % else
-  %   error('Wrong input to XCORRF2');
-  % end
-
+  
   % % multiply transforms then inverse transform
   % c = ifft2(at.*bt);
-
+  
   % % make real output for real input
   % if ~any(any(imag(a))) && ~any(any(imag(b)))
   %   c = real(c);
   % end
-
+  
   % if strcmp(pad,'yes');    % trim to standard size
   %   c(ma+mb:mf,:) = [];
   %   c(:,na+nb:nf) = [];
@@ -52,11 +52,33 @@ end
 
 
 % ------ TEST ZONE ------
-a = magic(4);
-% b = magic(4);
-b = [1 2 3; 
-    4 5 6; 
-    7 8 9];
-c = xcorrf2(a, b);
+a = [16 2 3 13 2;
+     5 11 10 8 9;  
+     9 7 6 12 4;
+     4 14 15 1 7
+     ];
+
+b = [1 2 3 4 5;
+    6 7 8 9 10;
+    11 12 13 14 15;
+    16 17 18 19 20;
+    21 22 23 24 25
+    ];
+
+[mb, nb] = size(b);
+[ma, na] = size(a);
+disp("mb: " + mb + newline + "nb: " + nb);
+disp("ma: " + ma + newline + "na: " + na);
+b = conj(b(mb:-1:1,nb:-1:1));
+disp("Reverse Conjugate: ");
+disp(b);
+
+mf = 2^nextpow2(ma+mb);
+nf = 2^nextpow2(na+nb);
+disp("mf: " + mf + newline + "nf: " + nf);
+
+at = fft2(b,mf,nf);
+disp("FFT2 of b");
+disp(at);
 
 % ------ TEST ZONE ------

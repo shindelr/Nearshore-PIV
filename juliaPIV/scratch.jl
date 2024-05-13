@@ -18,11 +18,10 @@ function pad(og_matrix, pad_rows, pad_cols)
     og_m_cols = size(og_matrix, 2)
     m_zeros = zeros(
         eltype(og_matrix), 
-        og_m_rows + pad_rows, 
-        og_m_cols + pad_cols
+        og_m_rows + 2*pad_rows, 
+        og_m_cols + 2*pad_cols
         )
     m_zeros[(pad_rows + 1):(end - pad_rows), (pad_cols + 1):(end - pad_cols)] = og_matrix
-    # m_zeros[(pad_rows + 1):(end - pad_rows), (pad_cols + 1):(end- pad_cols)]
     return m_zeros 
 end
 
