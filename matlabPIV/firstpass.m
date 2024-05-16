@@ -126,6 +126,6 @@ function c = xcorrf2(a,b,pad)
   if strcmp(pad,'yes');    % trim to standard size
     c(ma+mb:mf,:) = [];
     c(:,na+nb:nf) = [];
-    elseif strcmp(pad,'no');
+  elseif strcmp(pad,'no');
     c=(c(1:end-1,1:end-1));
   end

@@ -52,9 +52,43 @@ function xcorrf2(a, b, pad=true)
         bt = fft(a)
         at = fft(b)  # Opportunity for more efficiency using plan_fft()?
     end
+
+    # Mult transforms and invert
+
+    # pad = false generates a mismatched size error.
     mult_at_bt = at.*bt
+
+    # Seems to work, but I get a ton of imaginary junk where matlab gets 00.00's
+    # I don't think it matters since we trim it off anyways.
     c = ifft(mult_at_bt)
+
+    # I'm not sure this is necessary? I mean won't it be at least O(n) to check
+    # both arrays for any imaginary numbers? Seems like a real time hog, and
+    # real() runs happily on both complex and real nums.
+    # Real out for real in
+    # if !any(imag.(a)) && !any(imag.(b))
+    #     c = real(c)
+    # end
+
+    # Make all real
+    real(c)
+
+    println("ma: ", ma,"\nna: ", na,"\nmb: ", mb, "\nnb: ", nb, "\nmf: ", mf, "\nnf: ",nf)
+
+    # Trim
+    if pad
+        rows = ma + mb
+        cols = na + nb
+
+        # This seems to work for the matrices I've tested it on. Needs more 
+        # testing though! 
+        # We just keep everything from the first index to the index where we
+        # started padding things.
     
+        c = c[1:rows - 1, 1:cols - 1]
+    else
+        c = c[1:end-1, 1:end-1]
+    end
 end
 
 # ------ TEST ZONE ------
@@ -63,6 +97,11 @@ a = [16 2 3 13 2;
      9 7 6 12 4;
      4 14 15 1 7
      ]
+
+# a = [400.0+0.0im 434.0+0.0im;         
+# 491.0+0.0im 795.0+0.0im]
+# b = [400.0+0.0im 434.0+0.0im;         
+# 491.0+0.0im 795.0+0.0im]
 
 b = [1 2 3 4 5;
     6 7 8 9 10;
