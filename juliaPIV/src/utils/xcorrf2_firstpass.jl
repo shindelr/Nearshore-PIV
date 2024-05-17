@@ -73,7 +73,7 @@ function xcorrf2(a, b, pad=true)
     # Make all real
     real(c)
 
-    println("ma: ", ma,"\nna: ", na,"\nmb: ", mb, "\nnb: ", nb, "\nmf: ", mf, "\nnf: ",nf)
+    # println("ma: ", ma,"\nna: ", na,"\nmb: ", mb, "\nnb: ", nb, "\nmf: ", mf, "\nnf: ",nf)
 
     # Trim
     if pad
@@ -92,7 +92,8 @@ function xcorrf2(a, b, pad=true)
 end
 
 # ------ TEST ZONE ------
-a = [16 2 3 13 2;
+a = [1 2 3 4 5;
+    16 2 3 13 2;
      5 11 10 8 9;  
      9 7 6 12 4;
      4 14 15 1 7
@@ -110,6 +111,6 @@ b = [1 2 3 4 5;
     21 22 23 24 25
     ]
 
-@time xcorrf2(a, b)
+@time xcorrf2(a, b, false)
 
 # ------ TEST ZONE ------

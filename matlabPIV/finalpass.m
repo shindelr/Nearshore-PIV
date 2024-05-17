@@ -180,6 +180,7 @@ if strcmp(pad,'yes');
     at = fft2(b,mf,nf);
     bt = fft2(a,mf,nf);
 elseif strcmp(pad,'no');
+    disp("pad no");
     at = fft2(b);
     bt = fft2(a);
 else
