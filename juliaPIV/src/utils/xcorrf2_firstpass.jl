@@ -1,5 +1,22 @@
 using FFTW
-"""  
+
+"""
+TODO:
+"""
+function firstpass(A, B, N, overlap, idx, idy)
+
+end
+
+
+
+
+
+
+
+
+
+
+"""
 **c = xcorrf2(a,b, pad)**\n
 Two-dimensional cross-correlation using Fourier transforms.
 XCORRF2(A,B) computes the crosscorrelation of matrices A and B.
@@ -9,19 +26,18 @@ See also XCORR2.
 \n**:params:**\n
 a: matrix (2D array) to be compared.\n
 b: matrix ((2D array)) to be compared.\n
-pad: Transform and trim result? Default val is true. Pass false if padding is \
-not desired.\n
+pad: Transform and trim result to optimize the speed of the FFTs. This was faster\
+ in matlab. Julia does not handling padding automatically and so required two \
+ O(2n) actions to be taken. Default val is false. 
 \n**:return:**\n
 c: A matrix whose values reflect the 2D correlation between every cell \
 in a & b.
 
-Originally written in Matlab by,
-Author(s): R. Johnson
+Originally written in Matlab by,\n
+Author(s): R. Johnson\n
 Revision: 1.0   Date: 1995/11/27
 """
-function xcorrf2(a, b, pad=true)
-    # Opportunity for more efficiency using plan_fft()?
-    
+function xcorrf2(a, b, pad=false)
     # Unpack size() return tuple into appropriate variables
     ma, na = size(a)
     mb, nb = size(b)
@@ -29,9 +45,8 @@ function xcorrf2(a, b, pad=true)
     # Reverse conjugate
     b = conj(b[mb:-1:1, nb:-1:1])
 
-    # Either transform len with pow2 or skip straight to fourier transforms.
+    # This is a time hog, so pad is default to false.
     if pad
-        # Slightly different behavior of nextpow() eliminates the need for 2^ maybe?
         mf = nextpow(2, ma + mb)  
         nf = nextpow(2, na + nb)
 
@@ -46,45 +61,23 @@ function xcorrf2(a, b, pad=true)
         # Run fft's
         at = fft(pad_matrix_b)
         bt = fft(pad_matrix_a)
-
-    # Pad = False, don't do it
     else
         bt = fft(a)
-        at = fft(b)  # Opportunity for more efficiency using plan_fft()?
+        at = fft(b)
     end
 
     # Mult transforms and invert
-
-    # pad = false generates a mismatched size error.
     mult_at_bt = at.*bt
-
-    # Seems to work, but I get a ton of imaginary junk where matlab gets 00.00's
-    # I don't think it matters since we trim it off anyways.
     c = ifft(mult_at_bt)
-
-    # I'm not sure this is necessary? I mean won't it be at least O(n) to check
-    # both arrays for any imaginary numbers? Seems like a real time hog, and
-    # real() runs happily on both complex and real nums.
-    # Real out for real in
-    # if !any(imag.(a)) && !any(imag.(b))
-    #     c = real(c)
-    # end
 
     # Make all real
     real(c)
-
-    # println("ma: ", ma,"\nna: ", na,"\nmb: ", mb, "\nnb: ", nb, "\nmf: ", mf, "\nnf: ",nf)
 
     # Trim
     if pad
         rows = ma + mb
         cols = na + nb
-
-        # This seems to work for the matrices I've tested it on. Needs more 
-        # testing though! 
-        # We just keep everything from the first index to the index where we
-        # started padding things.
-    
+        # Keep everything from the first index to the index where padding began
         c = c[1:rows - 1, 1:cols - 1]
     else
         c = c[1:end-1, 1:end-1]
@@ -99,18 +92,13 @@ a = [1 2 3 4 5;
      4 14 15 1 7
      ]
 
-# a = [400.0+0.0im 434.0+0.0im;         
-# 491.0+0.0im 795.0+0.0im]
-# b = [400.0+0.0im 434.0+0.0im;         
-# 491.0+0.0im 795.0+0.0im]
+b = [3 4 5 6 7;
+     8 9 10 11 12;
+     13 14 15 16 17;
+     18 19 20 21 22;
+     23 24 25 26 27
+     ]
 
-b = [1 2 3 4 5;
-    6 7 8 9 10;
-    11 12 13 14 15;
-    16 17 18 19 20;
-    21 22 23 24 25
-    ]
-
-@time xcorrf2(a, b, false)
+@time xcorrf2(a, b)
 
 # ------ TEST ZONE ------
