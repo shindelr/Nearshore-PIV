@@ -79,6 +79,7 @@ function xcorrf2(a, b, pad=false)
     else
         c = c[1:end-1, 1:end-1]
     end
+    return c
 end
 
 
@@ -118,8 +119,6 @@ function main()
     # !!!!!!!!!! Profile stuff goes here !!!!!!!!!!!!!
 
     
-
-
 
 end
 
