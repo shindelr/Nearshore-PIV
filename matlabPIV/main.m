@@ -23,6 +23,7 @@ pass_sizes=2.^[6:-1:log2pivwin]';  % step-down the window sizes in powers of two
 % repeat the last window iteration (also required)
 pass_sizes=[pass_sizes pass_sizes];
 pass_sizes=[pass_sizes;pass_sizes(end,:)];
+% disp(pass_sizes);
 
 % other input params for matpiv
 dt=1;%1/40  % frame time step in seconds.  Set to 1 to get 'pixels per frame' velocity
@@ -33,6 +34,7 @@ validvec=3;  % threshold for vector validation during multipass
 if(doprofile)
   profile on  % optional, initiate the matlab profiler
 end
+% func sig: multipassx(A,B,wins,Dt,overlap,sensit)
 [x,y,u,v,SnR,Pkh]=multipassx(im1,im2,pass_sizes,...
                              dt,overlap,validvec);
 if(doprofile)

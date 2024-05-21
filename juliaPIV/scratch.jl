@@ -25,19 +25,13 @@ function pad(og_matrix, pad_rows, pad_cols)
     return m_zeros 
 end
 
-# ------ TEST ZONE ------
-
-a = [16 2 3 13;
-5 11 10 8;  
-9 7 6 12;
-4 14 15 1]
-b = [1 2 3; 
-4 5 6; 
-7 8 9]
-ma, na = size(a)
-mb, nb = size(b)
-mf = Base._nextpow2(ma + mb)
-nf = Base._nextpow2(na + nb)
-c = pad(b, mf, nf)
-println(c)
-# ------ TEST ZONE ------
+pivwin = 16
+log2pivwin = log2(pivwin)
+if log2pivwin - round(log2pivwin) != 0
+    error("pivwin must be factor of 2")
+end
+pass_sizes = 2 .^ collect(6:-1:log2pivwin)
+# Duplicate final element
+push!(pass_sizes, pass_sizes[end])
+# Convert vector to matrix
+pass_sizes = [pass_sizes pass_sizes]

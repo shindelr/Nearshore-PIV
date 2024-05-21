@@ -4,12 +4,9 @@ using FFTW
 TODO:
 """
 function firstpass(A, B, N, overlap, idx, idy)
+    
 
 end
-
-
-
-
 
 
 
@@ -99,6 +96,6 @@ b = [3 4 5 6 7;
      23 24 25 26 27
      ]
 
-@time xcorrf2(a, b)
+# @time xcorrf2(a, b)
 
 # ------ TEST ZONE ------
