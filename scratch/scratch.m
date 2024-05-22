@@ -146,10 +146,14 @@ pass_sizes=2.^[6:-1:log2pivwin]';  % step-down the window sizes in powers of two
 pass_sizes=[pass_sizes pass_sizes];
 pass_sizes=[pass_sizes;pass_sizes(end,:)];
 wins = pass_sizes;
-
+dt = 1; overlap = 0.5; validvec = 3;
 
 A=double(A);
 B=double(B);
 [sy,sx]=size(A);
 iter=size(wins,1);
+
+
+% datax=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))));
+% floor(sy/(wins(1,1)*(1-overlap)))
 % ------ TEST ZONE ------

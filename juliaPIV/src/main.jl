@@ -27,8 +27,16 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     sy, sx = size(A)
     iter = size(wins, 1)
 
-    
+    # Initial passes are for removing large-scale displacements.  Initialize
+    # displacements (datax,datay) to zero
+    data_dim_1 = floor(Int64, (sy/(wins[1,1] * (1-overlap))))
+    data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap)))) 
+    datax = zeros(eltype(A), (data_dim_1, data_dim_2))
+    datay = zeros(eltype(A), (data_dim_1, data_dim_2))
 
+
+
+    # Dummy values
     x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
     return x, y, u, v, SnR, Pkh
 
@@ -140,7 +148,6 @@ function main(A, B)
 
     # other input params for piv
     dt = 1; overlap = 0.5; validvec = 3
-    sy,sz = size(A)
     x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
