@@ -4,6 +4,7 @@
 
 function [x,y,u,v,SnR,Pkh]=multipassx(A,B,wins,Dt,overlap,sensit)
 
+% Converts A, B to double precision floats.
 A=double(A);
 B=double(B);
 

@@ -1,5 +1,40 @@
 using FFTW
 
+# PASS FUNCTIONS
+"""
+### multipassx
+
+\n**:params:**\n
+A: Matrix containing image data of first frame.\n
+B: Matrix containing image data of second frame.\n
+wins: 2D matrix of ints containing sub-window pixel sizes for each pass.\n
+Dt: Frame time step in seconds (int). Pass 1 for 'pixels per frame velocity'.\n
+overlap: Fraction of window overlap. Int.\n
+sensit: Threshold for vector validation. Int. \n
+\n**:returns:**\n
+x: \n
+y: \n
+u: \n
+v: \n
+SnR: Ratio representing signal-to-noise.\n
+Pkh: Peak height for use in validation of vector field?\n
+"""
+function multipassx(A, B, wins, Dt, overlap, sensit)
+    # Convert A, B to floats
+    A = convert(Matrix{Float64}, A)
+    B = convert(Matrix{Float64}, B)
+
+    sy, sx = size(A)
+    iter = size(wins, 1)
+
+    
+
+    x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
+    return x, y, u, v, SnR, Pkh
+
+end
+
+
 """
 TODO:
 """
@@ -12,55 +47,52 @@ end
 
 
 
-
+# UTILITIES
 """
-**c = xcorrf2(a,b, pad)**\n
+### xcorrf2
 Two-dimensional cross-correlation using Fourier transforms.
 XCORRF2(A,B) computes the crosscorrelation of matrices A and B.
-XCORRF2(A) is the autocorrelation function.
-This routine is functionally equivalent to xcorr2 but usually faster.
-See also XCORR2.
 \n**:params:**\n
-a: matrix (2D array) to be compared.\n
-b: matrix ((2D array)) to be compared.\n
+A: matrix (2D array) to be compared.\n
+B: matrix ((2D array)) to be compared.\n
 pad: Transform and trim result to optimize the speed of the FFTs. This was faster\
  in matlab. Julia does not handling padding automatically and so required two \
  O(2n) actions to be taken. Default val is false. 
 \n**:return:**\n
 c: A matrix whose values reflect the 2D correlation between every cell \
-in a & b. matrix is 2D float 64.
+in A & B. Matrix is 2D float 64.
 
 Originally written in Matlab by,\n
 Author(s): R. Johnson\n
 Revision: 1.0   Date: 1995/11/27
 """
-function xcorrf2(a, b, pad=false)
+function xcorrf2(A, B, pad=false)
     # Unpack size() return tuple into appropriate variables
-    ma, na = size(a)
-    mb, nb = size(b)
+    ma, na = size(A)
+    mb, nb = size(B)
     
     # Reverse conjugate
-    b = conj(b[mb:-1:1, nb:-1:1])
+    B = conj(B[mb:-1:1, nb:-1:1])
 
-    # This is a time hog, so pad is default to false.
+    # This is A time hog, so pad is default to false.
     if pad
         mf = nextpow(2, ma + mb)  
         nf = nextpow(2, na + nb)
 
         # Initialize new zero matrix of relevant padding size
-        pad_matrix_a = zeros(eltype(a), (mf, nf))
-        pad_matrix_b = zeros(eltype(b), (mf, nf))
+        pad_matrix_a = zeros(eltype(A), (mf, nf))
+        pad_matrix_b = zeros(eltype(B), (mf, nf))
 
         # Pad both matrices up to the efficient padding size
-        pad_matrix_a[1:size(a,1), 1:size(a,2)] = a[1:size(a,1), 1:size(a,2)]
-        pad_matrix_b[1:size(b,1), 1:size(b,2)] = b[1:size(b,1), 1:size(b,2)]
+        pad_matrix_a[1:size(A,1), 1:size(A,2)] = A[1:size(A,1), 1:size(A,2)]
+        pad_matrix_b[1:size(B,1), 1:size(B,2)] = B[1:size(B,1), 1:size(B,2)]
 
         # Run fft's
         at = fft(pad_matrix_b)
         bt = fft(pad_matrix_a)
     else
-        bt = fft(a)
-        at = fft(b)
+        bt = fft(A)
+        at = fft(B)
     end
 
     # Mult transforms and invert
@@ -84,25 +116,18 @@ end
 
 
 """
-Minimal PIV calculation for testing and development.
+### Main Entry
+Minimal PIV calculation for testing and development.\n
+Run two images through the PIV process, eventually ending in the expected PIV \
+plots.\n
+This should be the only public facing function in this library.\n
+\n**:params:**\n
+A: Matrix containing image data of first frame.\n
+B: Matrix containing image data of second frame.\n
+\n**:returns:**\n
+PIV plots.
 """
-function main()
-
-    # !!!!!!!!!!Replace these test matrices with the loaded image data!!!!!!!!
-    a = [1 2 3 4 5;
-        16 2 3 13 2;
-        5 11 10 8 9;  
-        9 7 6 12 4;
-        4 14 15 1 7
-        ]
-
-    b = [3 4 5 6 7;
-        8 9 10 11 12;
-        13 14 15 16 17;
-        18 19 20 21 22;
-        23 24 25 26 27
-        ]
-    
+function main(A, B)
     pivwin = 16
     log2pivwin = log2(pivwin)
     if log2pivwin - round(log2pivwin) != 0
@@ -115,8 +140,12 @@ function main()
 
     # other input params for piv
     dt = 1; overlap = 0.5; validvec = 3
+    sy,sz = size(A)
+    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # !!!!!!!!!! Profile stuff goes here !!!!!!!!!!!!!
+    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     
 
@@ -125,5 +154,20 @@ end
 
 
 # ------ TEST ZONE ------
-main()
+
+A = [1 2 3 4 5;
+16 2 3 13 2;
+5 11 10 8 9;  
+9 7 6 12 4;
+4 14 15 1 7
+]
+
+B = [3 4 5 6 7;
+8 9 10 11 12;
+13 14 15 16 17;
+18 19 20 21 22;
+23 24 25 26 27
+]
+
+main(A, B)
 # ------ TEST ZONE ------

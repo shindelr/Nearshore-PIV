@@ -120,14 +120,14 @@ end
 
 
 % ------ TEST ZONE ------
-a = [1 2 3 4 5;
+A = [1 2 3 4 5;
   16 2 3 13 2;
   5 11 10 8 9;
   9 7 6 12 4;
   4 14 15 1 7
   ];
 
-b = [3 4 5 6 7;
+B = [3 4 5 6 7;
   8 9 10 11 12;
   13 14 15 16 17;
   18 19 20 21 22;
@@ -136,16 +136,20 @@ b = [3 4 5 6 7;
 
 pivwin=16;  % 16pix is a final window size that worked well for ROXSI 2023
 log2pivwin=log2(pivwin);
+if(log2pivwin-round(log2pivwin)~=0)
+  error('pivwin must be a factor of 2')
+end
 pass_sizes=2.^[6:-1:log2pivwin]';  % step-down the window sizes in powers of two
+
+% make the analysis window sizes 2d (as required for the matpiv code), and
+% repeat the last window iteration (also required)
 pass_sizes=[pass_sizes pass_sizes];
 pass_sizes=[pass_sizes;pass_sizes(end,:)];
-% disp(pass_sizes);
-% i = 1;
-% dt = 1;
-% overlap = 0.5;
-% validvec = 3;
-% [x,y,datax,datay]=firstpass(a, b, pass_sizes(i,:), overlap, datax, datay);
+wins = pass_sizes;
 
-% disp(xcorrf2(a, b, 'no'));
 
+A=double(A);
+B=double(B);
+[sy,sx]=size(A);
+iter=size(wins,1);
 % ------ TEST ZONE ------
