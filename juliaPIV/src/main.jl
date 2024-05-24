@@ -82,11 +82,33 @@ function firstpass(A, B, N, overlap, idx, idy)
     # Some pretty strange code here, but I didn't want to change it just in case
     yy = xx
     datax = xx; datay = xx; IN = zeros(eltype(A), size(A))
-    println(((1-overlap) * N), " to ", sy - N + 1)
     cj = 1
+
     for jj in 1:((1-overlap) * N):sy - N + 1
-        # Left off here, range function looks good, weird values though.
-        # Same as matlab so no worries.
+        ci = 1
+        for ii in 1:((1-overlap) * M):sx - M + 1
+            # I think this is all handling some kind of tricky index operation?
+            if IN[(jj + N/2), (ii + M/2)] != 1
+                if isnan(idx[cj, ci])
+                    idx[cj, ci] = 0
+                end
+                if isnan(idy[cj, ci])
+                    idy[cj, ci] = 0
+                end
+                if (jj + idy[cj, ci]) < 1
+                    idy[cj, ci] = 1 - jj
+                elseif (jj + idy[cj, ci]) > (sy - N+1)
+                    idy[cj, ci] = sy - N + 1 - jj
+                end
+                if (ii + idx[cj, ci]) < 1
+                    idx[cj, ci] = 1 - ii
+                elseif (ii + idx[cj, ci]) > (sx - M + 1)
+                    idx[cj, ci] = sx - M + 1 - ii
+                end
+
+            end
+            cj += 1
+        end
     end
 
 
@@ -94,8 +116,6 @@ function firstpass(A, B, N, overlap, idx, idy)
     x=0; y=0;
     return x, y, datax, datay
 end
-
-
 
 
 # UTILITIES
@@ -179,7 +199,7 @@ end
     PIV plots.
 """
 function main(A, B)
-    println("===============\nBegin execution\n===============")
+    println("===============\nBegin execution\n===============\n")
 
     pivwin = 16
     log2pivwin = log2(pivwin)
@@ -198,19 +218,12 @@ function main(A, B)
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # !!!!!Profile stuff goes here and rest of main() lol !!!!!
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    println("===============\nExiting now\n===============")
+    println("\n===============\nExiting now\n===============")
 end
 
 
 
 # ------ TEST ZONE ------
-
-# A = [1 2 3 4 5;
-# 16 2 3 13 2;
-# 5 11 10 8 9;  
-# 9 7 6 12 4;
-# 4 14 15 1 7
-# ]
 
 A = [
     38 28 14 42 7 20 38 18 22 10;
@@ -224,13 +237,6 @@ A = [
     47 14  7 13 22 39 20 15 44 17;
     46 23 25 24 44 40 28 14 44  0
 ]
-
-# B = [3 4 5 6 7;
-# 8 9 10 11 12;
-# 13 14 15 16 17;
-# 18 19 20 21 22;
-# 23 24 25 26 27
-# ]
 
 B = [
     46 34 22 49 7 27 45 28 24 10;

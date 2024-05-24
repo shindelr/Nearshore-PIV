@@ -14,28 +14,27 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
   
   cj=1;
   for jj=1:((1-overlap)*N):sy-N+1
-    disp(jj);
-  %   ci=1;
-  %   for ii=1:((1-overlap)*M):sx-M+1 
+    ci=1;
+    for ii=1:((1-overlap)*M):sx-M+1 
   
-  %     if IN(jj+N/2,ii+M/2)~=1 
+      if IN(jj+N/2,ii+M/2)~=1  
         
-  %       if isnan(idx(cj,ci))
-  %         idx(cj,ci)=0;
-  %       end
-  %       if isnan(idy(cj,ci))
-  %         idy(cj,ci)=0;
-  %       end
-  %       if jj+idy(cj,ci)<1
-  %         idy(cj,ci)=1-jj;
-  %       elseif jj+idy(cj,ci)>sy-N+1
-  %         idy(cj,ci)=sy-N+1-jj;
-  %       end       
-  %       if ii+idx(cj,ci)<1
-  %         idx(cj,ci)=1-ii;    
-  %       elseif ii+idx(cj,ci)>sx-M+1
-  %         idx(cj,ci)=sx-M+1-ii;
-  %       end
+        if isnan(idx(cj,ci))
+          idx(cj,ci)=0;
+        end
+        if isnan(idy(cj,ci))
+          idy(cj,ci)=0;
+        end
+        if jj+idy(cj,ci)<1
+          idy(cj,ci)=1-jj;
+        elseif jj+idy(cj,ci)>sy-N+1
+          idy(cj,ci)=sy-N+1-jj;
+        end       
+        if ii+idx(cj,ci)<1
+          idx(cj,ci)=1-ii;    
+        elseif ii+idx(cj,ci)>sx-M+1
+          idx(cj,ci)=sx-M+1-ii;
+        end
   
   %       C=A(jj:jj+N-1,ii:ii+M-1);   
   %       D=B(jj+idy(cj,ci):jj+N-1+idy(cj,ci),ii+idx(cj,ci):ii+M-1+idx(cj,ci));
@@ -74,10 +73,10 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
   %     else
   %       xx(cj,ci)=ii+M/2; yy(cj,ci)=jj+N/2;
   %       datax(cj,ci)=NaN; datay(cj,ci)=NaN; ci=ci+1;
-      % end  
-    % end
+      end  
+    end
   
-  %   cj=cj+1;
+    cj=cj+1;
   end
 end
 
@@ -122,13 +121,6 @@ end
 
 
 % ------ TEST ZONE ------
-% A = [1 2 3 4 5;
-%   16 2 3 13 2;
-%   5 11 10 8 9;
-%   9 7 6 12 4;
-%   4 14 15 1 7
-%   ];
-
 A = [
     38, 28, 14, 42, 7, 20, 38, 18, 22, 10;
     10, 23, 35, 39, 23, 2, 21, 1, 23, 43;
@@ -141,13 +133,6 @@ A = [
     47, 14, 7, 13, 22, 39, 20, 15, 44, 17;
     46, 23, 25, 24, 44, 40, 28, 14, 44, 0
 ];
-
-% B = [3 4 5 6 7;
-%   8 9 10 11 12;
-%   13 14 15 16 17;
-%   18 19 20 21 22;
-%   23 24 25 26 27
-%   ];
 
 B = [
     46, 34, 22, 49, 7, 27, 45, 28, 24, 10;
