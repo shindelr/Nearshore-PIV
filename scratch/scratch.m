@@ -1,23 +1,115 @@
 clear;
 
+% function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
+
+%   M=N(1); N=N(2); 
+%   [sy,sx]=size(A);
+
+%   xx=zeros(ceil((size(A,1)-N)/((1-overlap)*N))+1, ...
+%       ceil((size(A,2)-M)/((1-overlap)*M)) +1);
+%   yy=xx;
+%   datax=xx;
+%   datay=xx; 
+%   IN=zeros(size(A)); 
+%   disp("Idy & Idx: ");
+%   disp(size(idy));  % CHANGE    
+%   disp(size(idx));  % CHANGE  
+  
+%   cj=1;
+%   for jj=1:((1-overlap)*N):sy-N+1
+%     ci=1;
+%     for ii=1:((1-overlap)*M):sx-M+1 
+  
+%       if IN(jj+N/2,ii+M/2)~=1  
+        
+%         if isnan(idx(cj,ci))
+%           idx(cj,ci)=0;
+%         end
+%         if isnan(idy(cj,ci))
+%           idy(cj,ci)=0;
+%         end
+%         if jj+idy(cj,ci)<1
+%           idy(cj,ci)=1-jj;
+%         elseif jj+idy(cj,ci)>sy-N+1
+%           idy(cj,ci)=sy-N+1-jj;
+%         end       
+%         if ii+idx(cj,ci)<1
+%           idx(cj,ci)=1-ii;    
+%         elseif ii+idx(cj,ci)>sx-M+1
+%           idx(cj,ci)=sx-M+1-ii;
+%         end
+  
+%         C=A(jj:jj+N-1,ii:ii+M-1);   
+%         D=B(jj+idy(cj,ci):jj+N-1+idy(cj,ci),...
+%             ii+idx(cj,ci):ii+M-1+idx(cj,ci));
+%         % disp(size(C)); disp(size(D));
+
+%         % The second bit of this line has always been commented out
+%         C=C-mean(C(:)); D=D-mean(D(:)); %C(C<0)=0; D(D<0)=0; 
+%         stad1=std(C(:)); stad2=std(D(:)); 
+%         % C=C.*W; %D=D.*W;  % Apply weight function by uncommenting
+  
+%         if stad1==0, stad1=nan; end
+%         if stad2==0, stad2=nan; end
+  
+%   %       % normalized correlation
+%         R=xcorrf2(C,D)/(N*M*stad1*stad2);
+  
+%         % find position of maximal value of R
+%         if size(R,1)==(N-1)
+%           [max_y1,max_x1]=find(R==max(R(:)));
+%         else
+%           [max_y1,max_x1]=find(R==max(max(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))));
+%         end
+        
+%         if length(max_x1)>1
+%           max_x1=round(sum(max_x1.*(1:length(max_x1))')./sum(max_x1));
+%           max_y1=round(sum(max_y1.*(1:length(max_y1))')./sum(max_y1));
+%         elseif isempty(max_x1)
+%           idx(cj,ci)=nan;
+%           idy(cj,ci)=nan;
+%           max_x1=nan;
+%           max_y1=nan;
+%         end
+  
+%         % store the displacements in variable datax/datay
+%         datax(cj,ci)=-(max_x1-(M))+idx(cj,ci);
+%         datay(cj,ci)=-(max_y1-(N))+idy(cj,ci);
+%         xx(cj,ci)=ii+M/2; yy(cj,ci)=jj+N/2;
+%         ci=ci+1;
+%       else
+%         xx(cj,ci)=ii+M/2; yy(cj,ci)=jj+N/2;
+%         datax(cj,ci)=NaN; datay(cj,ci)=NaN; ci=ci+1;
+%       end  
+%     end
+  
+%     cj=cj+1;
+%   end
+% end
+
 function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
 
   M=N(1); N=N(2); 
   [sy,sx]=size(A);
-
   xx=zeros(ceil((size(A,1)-N)/((1-overlap)*N))+1, ...
       ceil((size(A,2)-M)/((1-overlap)*M)) +1);
   yy=xx;
   datax=xx;
   datay=xx; 
-  IN=zeros(size(A)); 
+  IN=zeros(size(A));
+  % printed = 0;  % My little print statement.
+  % if printed <= 3  % My little print statement
+  %   disp(jj+N/2); 
+  %   disp(ii+M/2); 
+  %   printed = printed + 1;
+  % end
   
   cj=1;
   for jj=1:((1-overlap)*N):sy-N+1
     ci=1;
     for ii=1:((1-overlap)*M):sx-M+1 
   
-      if IN(jj+N/2,ii+M/2)~=1  
+      if IN(jj+N/2,ii+M/2)~=1 
         
         if isnan(idx(cj,ci))
           idx(cj,ci)=0;
@@ -36,50 +128,53 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
           idx(cj,ci)=sx-M+1-ii;
         end
   
-  %       C=A(jj:jj+N-1,ii:ii+M-1);   
-  %       D=B(jj+idy(cj,ci):jj+N-1+idy(cj,ci),ii+idx(cj,ci):ii+M-1+idx(cj,ci));
-  %       C=C-mean(C(:)); D=D-mean(D(:)); %C(C<0)=0; D(D<0)=0;
-  %       stad1=std(C(:)); stad2=std(D(:)); 
-  %       %C=C.*W; %D=D.*W;  % Apply weight function by uncommenting
+        C=A(jj:jj+N-1,ii:ii+M-1);   
+        D=B(jj+idy(cj,ci):jj+N-1+idy(cj,ci),ii+idx(cj,ci):ii+M-1+idx(cj,ci));
+        C=C-mean(C(:)); D=D-mean(D(:)); %C(C<0)=0; D(D<0)=0;
+        stad1=std(C(:)); stad2=std(D(:)); 
+        %C=C.*W; %D=D.*W;  % Apply weight function by uncommenting
   
-  %       if stad1==0, stad1=nan; end
-  %       if stad2==0, stad2=nan; end
-  
-  %       % normalized correlation
-  %       R=xcorrf2(C,D)/(N*M*stad1*stad2);
-  
-  %       % find position of maximal value of R
-  %       if size(R,1)==(N-1)
-  %         [max_y1,max_x1]=find(R==max(R(:)));
-  %       else
-  %         [max_y1,max_x1]=find(R==max(max(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))));
-  %       end
+        if stad1==0, stad1=nan; end
+        if stad2==0, stad2=nan; end
         
-  %       if length(max_x1)>1
-  %         max_x1=round(sum(max_x1.*(1:length(max_x1))')./sum(max_x1));
-  %         max_y1=round(sum(max_y1.*(1:length(max_y1))')./sum(max_y1));
-  %       elseif isempty(max_x1)
-  %         idx(cj,ci)=nan;
-  %         idy(cj,ci)=nan;
-  %         max_x1=nan;
-  %         max_y1=nan;
-  %       end
+        % normalized correlation
+        R=xcorrf2(C,D)/(N*M*stad1*stad2);
+        if ci == 1 && cj == 1
+          disp("Size of R: ");
+          disp(size(R));
+        end
   
-  %       % store the displacements in variable datax/datay
-  %       datax(cj,ci)=-(max_x1-(M))+idx(cj,ci);
-  %       datay(cj,ci)=-(max_y1-(N))+idy(cj,ci);
-  %       xx(cj,ci)=ii+M/2; yy(cj,ci)=jj+N/2;
-  %       ci=ci+1;
-  %     else
-  %       xx(cj,ci)=ii+M/2; yy(cj,ci)=jj+N/2;
-  %       datax(cj,ci)=NaN; datay(cj,ci)=NaN; ci=ci+1;
-      end  
+        % find position of maximal value of R
+        if size(R,1)==(N-1)
+          [max_y1,max_x1]=find(R==max(R(:)));
+        else
+          [max_y1,max_x1]=find(R==max(max(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))));
+        end
+        
+        if length(max_x1)>1
+          max_x1=round(sum(max_x1.*(1:length(max_x1))')./sum(max_x1));
+          max_y1=round(sum(max_y1.*(1:length(max_y1))')./sum(max_y1));
+        elseif isempty(max_x1)
+          idx(cj,ci)=nan;
+          idy(cj,ci)=nan;
+          max_x1=nan;
+          max_y1=nan;
+        end
+  
+        % store the displacements in variable datax/datay
+        datax(cj,ci)=-(max_x1-(M))+idx(cj,ci);
+        datay(cj,ci)=-(max_y1-(N))+idy(cj,ci);
+        xx(cj,ci)=ii+M/2; yy(cj,ci)=jj+N/2;
+        ci=ci+1;
+      else
+        xx(cj,ci)=ii+M/2; yy(cj,ci)=jj+N/2;
+        datax(cj,ci)=NaN; datay(cj,ci)=NaN; ci=ci+1;
+      end
     end
   
     cj=cj+1;
   end
 end
-
 
 function c = xcorrf2(a,b,pad)
   if nargin==2
@@ -110,7 +205,7 @@ function c = xcorrf2(a,b,pad)
   if ~any(any(imag(a))) && ~any(any(imag(b)))
     c = real(c);
   end
-
+  disp(size(c));
   if strcmp(pad,'yes');    % trim to standard size
     c(ma+mb:mf,:) = [];
     c(:,na+nb:nf) = [];
@@ -121,31 +216,34 @@ end
 
 
 % ------ TEST ZONE ------
-A = [
-    38, 28, 14, 42, 7, 20, 38, 18, 22, 10;
-    10, 23, 35, 39, 23, 2, 21, 1, 23, 43;
-    29, 37, 1, 20, 32, 11, 21, 43, 24, 48;
-    26, 41, 27, 15, 14, 46, 50, 43, 2, 36;
-    50, 6, 20, 8, 38, 17, 3, 24, 13, 49;
-    8, 25, 1, 19, 27, 46, 6, 43, 7, 46;
-    34, 13, 16, 35, 49, 39, 3, 1, 5, 41;
-    3, 28, 17, 25, 43, 33, 9, 35, 13, 30;
-    47, 14, 7, 13, 22, 39, 20, 15, 44, 17;
-    46, 23, 25, 24, 44, 40, 28, 14, 44, 0
-];
+% A = [
+%     38, 28, 14, 42, 7, 20, 38, 18, 22, 10;
+%     10, 23, 35, 39, 23, 2, 21, 1, 23, 43;
+%     29, 37, 1, 20, 32, 11, 21, 43, 24, 48;
+%     26, 41, 27, 15, 14, 46, 50, 43, 2, 36;
+%     50, 6, 20, 8, 38, 17, 3, 24, 13, 49;
+%     8, 25, 1, 19, 27, 46, 6, 43, 7, 46;
+%     34, 13, 16, 35, 49, 39, 3, 1, 5, 41;
+%     3, 28, 17, 25, 43, 33, 9, 35, 13, 30;
+%     47, 14, 7, 13, 22, 39, 20, 15, 44, 17;
+%     46, 23, 25, 24, 44, 40, 28, 14, 44, 0
+% ];
 
-B = [
-    46, 34, 22, 49, 7, 27, 45, 28, 24, 10;
-    17, 25, 37, 39, 33, 6, 30, 7, 32, 51;
-    35, 45, 8, 21, 32, 17, 27, 50, 28, 50;
-    33, 46, 37, 17, 14, 48, 54, 45, 2, 40;
-    59, 12, 26, 18, 46, 26, 12, 26, 19, 49;
-    11, 28, 5, 25, 33, 56, 9, 49, 17, 48;
-    39, 14, 25, 43, 53, 44, 6, 11, 14, 47;
-    11, 34, 17, 25, 51, 43, 17, 38, 21, 32;
-    53, 19, 14, 23, 30, 43, 20, 17, 53, 24;
-    56, 28, 32, 32, 47, 40, 28, 23, 47, 6
-];
+% B = [
+%     46, 34, 22, 49, 7, 27, 45, 28, 24, 10;
+%     17, 25, 37, 39, 33, 6, 30, 7, 32, 51;
+%     35, 45, 8, 21, 32, 17, 27, 50, 28, 50;
+%     33, 46, 37, 17, 14, 48, 54, 45, 2, 40;
+%     59, 12, 26, 18, 46, 26, 12, 26, 19, 49;
+%     11, 28, 5, 25, 33, 56, 9, 49, 17, 48;
+%     39, 14, 25, 43, 53, 44, 6, 11, 14, 47;
+%     11, 34, 17, 25, 51, 43, 17, 38, 21, 32;
+%     53, 19, 14, 23, 30, 43, 20, 17, 53, 24;
+%     56, 28, 32, 32, 47, 40, 28, 23, 47, 6
+% ];
+
+A = rand(2048, 3072);
+B = A + 2;
 
 % JUST SET UP FOR FIRSTPASS
 % ------------------------------------------------------------------------------
@@ -165,6 +263,7 @@ datay=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))))
 % ------------------------------------------------------------------------------
 
 for i=1:iter-1
+  disp(['iter ' num2str(i) ' of ' num2str(iter)])
   firstpass(A, B, wins(i, :), overlap, datax, datay)
 end
 

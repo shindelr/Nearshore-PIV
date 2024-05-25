@@ -7,7 +7,13 @@ xx=zeros(ceil((size(A,1)-N)/((1-overlap)*N))+1, ...
 yy=xx;
 datax=xx;
 datay=xx; 
-IN=zeros(size(A)); 
+IN=zeros(size(A));
+% printed = 0;  % My little print statement.
+% if printed <= 3  % My little print statement
+%   disp(jj+N/2); 
+%   disp(ii+M/2); 
+%   printed = printed + 1;
+% end
 
 cj=1;
 for jj=1:((1-overlap)*N):sy-N+1
@@ -41,10 +47,14 @@ for jj=1:((1-overlap)*N):sy-N+1
 
       if stad1==0, stad1=nan; end
       if stad2==0, stad2=nan; end
-
+          
       % normalized correlation
       R=xcorrf2(C,D)/(N*M*stad1*stad2);
-
+      if ci == 1 && cj == 1
+        disp("Size of R: ");
+        disp(size(R));
+      end
+          
       % find position of maximal value of R
       if size(R,1)==(N-1)
         [max_y1,max_x1]=find(R==max(R(:)));
@@ -70,13 +80,11 @@ for jj=1:((1-overlap)*N):sy-N+1
     else
       xx(cj,ci)=ii+M/2; yy(cj,ci)=jj+N/2;
       datax(cj,ci)=NaN; datay(cj,ci)=NaN; ci=ci+1;
-    end  
+    end
   end
 
   cj=cj+1;
 end
-
-% This function could be a good place to start.
 
 % now we inline the function XCORRF2 to shave off some time.
 function c = xcorrf2(a,b,pad)
@@ -109,7 +117,7 @@ function c = xcorrf2(a,b,pad)
     at = fft2(b,mf,nf);
     bt = fft2(a,mf,nf);
   elseif strcmp(pad,'no');
-    disp("pad: no");
+    % disp("pad: no");
     at = fft2(b);
     bt = fft2(a);
   else
