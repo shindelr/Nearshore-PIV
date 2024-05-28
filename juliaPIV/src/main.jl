@@ -66,25 +66,28 @@ depending on the size of the given windows. Consider renaming*\n\n
     overlap: Fraction of window overlap. Int.\n
     idx: Matrix of same type as A, containing data displacement information.\n
     idy: Matrix of same type as A, containing data displacement information.\n
+    pad: Bool to handle padding of the fast fourier transforms. Default to true,\
+    takes extra time but dramatically increases final resolution of the plots.
     \n**:returns:**\n
     x: \n
     y: \n
     datax: \n
     datay: \n
 """
-function firstpass(A, B, N, overlap, idx, idy)
+function firstpass(A, B, N, overlap, idx, idy, pad=true)
     M = floor(Int, N[1]); N = floor(Int, N[2])
     # Plan_fft using A, M, N here!
     # Chose to use paitient because it finds the perfect optimiazation for the
     # given matrix. It takes a couple of seconds at run time, but then the FFTs
     # are all run at that optimized speed, supposedly making up for the loss.
     
-    # Silly padding stuff
-    A_trunc = A[1:M, 1:N]  # Get appropriate size matrix to plan with.
-    ma, na = size(A_trunc)
-    mf = nextpow(2, ma + na)  
-    pad_matrix = zeros(eltype(A), (mf, mf))
-    P = plan_fft(pad_matrix; flags=FFTW.PATIENT)
+    if pad
+        pad_matrix = pad_for_xcorr( A[1:M, 1:N])
+        P = plan_fft(pad_matrix; flags=FFTW.PATIENT)
+    else
+        P = plan_fft(A[1:M, 1:N])
+    end
+
 
     sy, sx = size(A)
     xx_dim1 = ceil(Int, ((size(A,1)-N) / ((1-overlap) * N))) + 1
@@ -95,7 +98,6 @@ function firstpass(A, B, N, overlap, idx, idy)
     yy = xx
     datax = xx; datay = xx; 
     IN = zeros(Int64, size(A))
-
     cj = 1
     for jj in 1:((1-overlap) * N):(sy - N + 1)
         ci = 1
@@ -142,9 +144,10 @@ function firstpass(A, B, N, overlap, idx, idy)
                 end
 
                 # Call xcorrf2, passing in the FFT plan and normalize result
-                R = xcorrf2(C, D, P, true) / ( N* M * stad1 * stad2)
-                if ci == 1 && cj == 1
-                    display(size(R))
+                if pad
+                    R = xcorrf2(C, D, P, true) ./ ( N* M * stad1 * stad2)
+                else
+                    R = xcorrf2(C, D, P, false) ./ ( N* M * stad1 * stad2)
                 end
 
                 
@@ -163,6 +166,25 @@ end
 
 # UTILITIES
 """
+### pad_for_xcorr
+    Determine the dimensions of a padded matrix to be used for xcorrf2. Depends
+    on the dimensions of the current window size and the original array. Takes
+    the current window size, scales it by a power of 2, then creates an array of 
+    zeros that size. 
+    :params:
+        - trunc_matrix: The original matrix to be padded, but truncated down to\
+        the window's size. \n
+    :returns:
+        - A padded matrix of zeros.
+"""
+function pad_for_xcorr(trunc_matrix)
+    ma, na = size(trunc_matrix)
+    mf = nextpow(2, ma + na)  
+    return zeros(eltype(A), (mf, mf)) 
+end
+
+
+"""
 ### xcorrf2
     Two-dimensional cross-correlation using Fourier transforms.
     XCORRF2(A,B) computes the crosscorrelation of matrices A and B.
@@ -172,9 +194,10 @@ end
     \n**:params:**\n
     A: matrix (2D array) to be compared.\n
     B: matrix ((2D array)) to be compared.\n
-    pad: Transform and trim result to optimize the speed of the FFTs. This was faster\
-    in matlab. Julia does not handling padding automatically and so required two \
-    O(2n) actions to be taken. Default val is false. \n
+    pad: Transform and trim result to optimize the speed of the FFTs and\
+    increase the resolution of the resulting PIV plots. This was faster in \
+    matlab. Default val is true and the preoptimized FFT plan is used to offset\
+    the time issues. \n
     plan: Callable function representing a pre-planned, omptimized FFT. Created \
     using the dimensions of matrices A & B.
     \n**:return:**\n
@@ -185,7 +208,7 @@ end
     Author(s): R. Johnson\n
     Revision: 1.0   Date: 1995/11/27
 """
-function xcorrf2(A, B, plan, pad=false)
+function xcorrf2(A, B, plan, pad=true)
     # Unpack size() return tuple into appropriate variables
     ma, na = size(A)
     mb, nb = size(B)
@@ -193,32 +216,22 @@ function xcorrf2(A, B, plan, pad=false)
     # Reverse conjugate
     B = conj(B[mb:-1:1, nb:-1:1])
 
-    # This is A time hog, so pad is default to false.
-    # Does not use the preplanned optimized fft. 
+    # This is a time hog, but increases resolution of final plots by quite a bit
+    # Room for improvement here. I could pass in the original padded matrix somehow.
     if pad
-        mf = nextpow(2, ma + mb)  
-        nf = nextpow(2, na + nb)
+        pad_matrix_a = pad_for_xcorr(A)
+        pad_matrix_b = pad_for_xcorr(B)
 
-        # Initialize new zero matrix of relevant padding size
-        pad_matrix_a = zeros(eltype(A), (mf, nf))
-        pad_matrix_b = zeros(eltype(B), (mf, nf))
-
-        # Pad both matrices up to the efficient padding size
+        # Transfer data from og matrix to optimized sized ones
         pad_matrix_a[1:size(A,1), 1:size(A,2)] = A[1:size(A,1), 1:size(A,2)]
         pad_matrix_b[1:size(B,1), 1:size(B,2)] = B[1:size(B,1), 1:size(B,2)]
 
-        # Run fft's
+        # Runs optimized FFTs using the plan
         at = plan * pad_matrix_b
         bt = plan * pad_matrix_a
-        # at = fft(pad_matrix_b)
-        # bt = fft(pad_matrix_a)
     else
-        # Runs optimized FFTs using the plan.
         bt = plan * A
         at = plan * B
-        # Original fft calls.
-        # bt = fft(A)
-        # at = fft(B)
     end
 
     # Mult transforms and invert
