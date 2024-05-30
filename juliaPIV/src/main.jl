@@ -1,5 +1,7 @@
 using FFTW
 using Statistics
+using Images
+using FileIO
 
 # PASS FUNCTIONS
 """
@@ -150,6 +152,15 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                     R = xcorrf2(C, D, P, false) ./ ( N* M * stad1 * stad2)
                 end
 
+                # Find position of maximal value of R
+                if size(R, 1) == (N-1)
+                    max_y1, max_x1 = findmax(R)
+                else
+                    max_y1, max_x1 = findmax(R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
+                                              Int(floor(.5*M+2)):Int(floor(1.5*M-3))])
+                end
+                println(max_y1, max_x1)
+
                 
                 ci=ci+1;  # This placement will need to be adjusted
             end
@@ -180,7 +191,7 @@ end
 function pad_for_xcorr(trunc_matrix)
     ma, na = size(trunc_matrix)
     mf = nextpow(2, ma + na)  
-    return zeros(eltype(A), (mf, mf)) 
+    return zeros(eltype(trunc_matrix), (mf, mf)) 
 end
 
 
@@ -307,8 +318,8 @@ end
 # ]
 
 # Generate a matrix of random values
-A = rand(2048, 3072)
-B = A .+ 2
+# A = rand(2048, 3072)
+# B = A .+ 2
 
 # B = [
 #     46 34 22 49 7 27 45 28 24 10;
@@ -322,6 +333,13 @@ B = A .+ 2
 #     53 19 14 23 30 43 20 17 53 24;
 #     56 28 32 32 47 40 28 23 47 6
 # ]
+
+im1_path = "juliaPIV/data/im1.jpg"
+im2_path = "juliaPIV/data/im2.jpg"
+A = load(im1_path)
+B = load(im2_path)
+# mosaicview(A, B; nrows=1)
+
 
 @time main(A, B)
 # ------ TEST ZONE ------

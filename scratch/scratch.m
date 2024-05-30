@@ -53,6 +53,8 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
         else
           [max_y1,max_x1]=find(R==max(max(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))));
         end
+        disp(max_y1);
+        disp(max_x1);
         
         if length(max_x1)>1
           max_x1=round(sum(max_x1.*(1:length(max_x1))')./sum(max_x1));
@@ -146,8 +148,10 @@ end
 %     56, 28, 32, 32, 47, 40, 28, 23, 47, 6
 % ];
 
-A = rand(2048, 3072);
-B = A + 2;
+% A = rand(2048, 3072);
+% B = A + 2;
+A=imread('data/im1.jpg');
+B=imread('data/im2.jpg');
 
 % JUST SET UP FOR FIRSTPASS
 % ------------------------------------------------------------------------------
