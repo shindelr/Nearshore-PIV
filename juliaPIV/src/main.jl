@@ -36,23 +36,20 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = zeros(eltype(A), (data_dim_1, data_dim_2))
 
-    for i in 1:iter-1
-        println("Iter ", i, " of ", iter )
+    # for i in 1:iter-1
+        # println("Iter ", i, " of ", iter )
         # PIV proper
-        x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
+        # x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
+        x, y, datax, datay = firstpass(A, B, wins[1, :], overlap, datax, datay)
+        display(datay)
 
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # !!!!!!!!!! Complete multipassx below here !!!!!!
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-    end
+    # end
 
     # Dummy values
     x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
     return x, y, u, v, SnR, Pkh
 
 end
-
 
 """
 ### firstpass
@@ -82,7 +79,6 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
     # Chose to use paitient because it finds the perfect optimiazation for the
     # given matrix. It takes a couple of seconds at run time, but then the FFTs
     # are all run at that optimized speed, supposedly making up for the loss.
-    
     if pad
         pad_matrix = pad_for_xcorr( A[1:M, 1:N])
         P = plan_fft(pad_matrix; flags=FFTW.PATIENT)
@@ -90,16 +86,17 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
         P = plan_fft(A[1:M, 1:N])
     end
 
-
     sy, sx = size(A)
     xx_dim1 = ceil(Int, ((size(A,1)-N) / ((1-overlap) * N))) + 1
     xx_dim2 = ceil(Int, ((size(A,2)-M) / ((1-overlap) * M))) + 1
     xx = zeros(eltype(A), (xx_dim1, xx_dim2))
-
-    # Some pretty strange code here, but I didn't want to change it just in case
-    yy = xx
-    datax = xx; datay = xx; 
+    yy = zeros(eltype(A), (xx_dim1, xx_dim2))
+    datax = zeros(eltype(A), (xx_dim1, xx_dim2))
+    datay = zeros(eltype(A), (xx_dim1, xx_dim2))
     IN = zeros(Int64, size(A))
+
+    printed = false
+
     cj = 1
     for jj in 1:((1-overlap) * N):(sy - N + 1)
         ci = 1
@@ -147,27 +144,53 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
 
                 # Call xcorrf2, passing in the FFT plan and normalize result
                 if pad
-                    R = xcorrf2(C, D, P, true) ./ ( N* M * stad1 * stad2)
+                    R = xcorrf2(C, D, P, true) ./ ( N * M * stad1 * stad2)
                 else
-                    R = xcorrf2(C, D, P, false) ./ ( N* M * stad1 * stad2)
+                    R = xcorrf2(C, D, P, false) ./ ( N * M * stad1 * stad2)
                 end
-
+                
                 # Find position of maximal value of R
-                # Find max returns a CartesianIndex object which is a little
+                # findmax returns a CartesianIndex object which is a little
                 # hard to work with, so convert it to a Tuple and unpack.
-                if size(R, 1) == (N-1)
-                    max_val, max_coords = findmax(R)
-                    max_y1, max_x1 = Tuple(max_coords)
+                if size(R, 1) == (N - 1)
+                    # max_val, max_coords = findmax(R)
+                    max_val = maximum(R)
+                    max_indices = findall(x -> x == max_val, R)
+                    max_y1, max_x1 = Tuple(max_indices[1])
                 else
                     max_val, max_coords = findmax(
                                     R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
                                     Int(floor(.5*M+2)):Int(floor(1.5*M-3))])
                     max_y1, max_x1 = Tuple(max_coords)
+                    # subset =  R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
+                    #             Int(floor(.5*M+2)):Int(floor(1.5*M-3))]
+                    # max_val = maximum(R)
+                    # max_indices = findall(x -> x == max_val, subset)
+                    # max_y1, max_x1 = Tuple(max_indices[1])
+                    max_y1 += Int(0.5*N+1)
+                    max_x1 += Int(0.5*M+1)
+
+                    # if !printed
+                    #     println("============================")
+                    #     println("here on iter: ", cj, " ", ci)
+                    #     println("OG indices: ", max_coords)
+                    #     println("Max Coords after shift: ", max_x1, " ", max_y1)
+                    #     println("Max Val: ", max_val)
+                    #     # println("Size of subset: ", size(subset))
+                    #     # println("Len of max_x1: ",length(max_x1))
+                    #     println("============================")
+                        
+                    #     if cj == 31 && ci == 37
+                    #         printed = true
+                    #         # display(subset)
+                    #     end
+                    # end
                 end
 
+                
                 if length(max_x1) > 1
-                    max_x1 = round(sum(max_x1 .* (1:length(max_x1))') / sum(max_x1))
-                    max_y1 = round(sum(max_y1 .* (1:length(max_y1))') / sum(max_y1))
+                    max_x1 = round(Int, sum(max_x1 .* (1:length(max_x1))') / sum(max_x1))
+                    max_y1 = round(Int, sum(max_y1 .* (1:length(max_y1))') / sum(max_y1))
                 elseif isempty(max_x1)
                     idx[cj, ci] = NaN
                     idy[cj, ci] = NaN
@@ -175,8 +198,8 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 end
 
                 # Store displacements in variables datax/datay
-                datax[cj, ci] -= (max_x1-M) + idx[cj,ci]
-                datay[cj, ci] -= (max_y1-M) + idy[cj,ci]
+                datax[cj, ci] -= (max_x1 - M) + idx[cj,ci]
+                datay[cj, ci] -= (max_y1 - M) + idy[cj,ci]
                 xx[cj, ci] = ii + M/2
                 yy[cj, ci] = jj + N/2
                 ci += 1
@@ -194,7 +217,6 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
     end
     return xx, yy, datax, datay
 end
-
 
 # UTILITIES
 """
@@ -214,7 +236,6 @@ function pad_for_xcorr(trunc_matrix)
     mf = nextpow(2, ma + na)  
     return zeros(eltype(trunc_matrix), (mf, mf)) 
 end
-
 
 """
 ### xcorrf2
@@ -285,6 +306,10 @@ function xcorrf2(A, B, plan, pad=true)
     return c
 end
 
+"""
+### localfilt
+
+"""
 
 """
 ### Main Entry
@@ -324,6 +349,7 @@ end
 
 
 # ------ TEST ZONE ------
+# im1_path = "../data/im1.jpg"
 im1_path = "juliaPIV/data/im1.jpg"
 im2_path = "juliaPIV/data/im2.jpg"
 A = load(im1_path)

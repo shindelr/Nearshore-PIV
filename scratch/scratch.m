@@ -4,13 +4,13 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
   M=N(1); N=N(2); 
   [sy,sx]=size(A);
   xx=zeros(ceil((size(A,1)-N)/((1-overlap)*N))+1, ...
-      ceil((size(A,2)-M)/((1-overlap)*M)) +1);
+    ceil((size(A,2)-M)/((1-overlap)*M)) +1);
   yy=xx;
   datax=xx;
   datay=xx; 
   IN=zeros(size(A));
 
-  % printed = 0;
+  printed = 0;
   cj=1;
   for jj=1:((1-overlap)*N):sy-N+1
     ci=1;
@@ -53,7 +53,22 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
         else
           [max_y1,max_x1]=find(R==max(max(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))));
         end
-        % disp(max_y1);
+
+        % if printed == 0
+        %   disp("============================")
+        %   disp(["here on iter: ", cj, ci]);
+        %   disp(["Max Coords: ", max_x1, max_y1]);
+        %   disp(["Max val: ", R(max_y1, max_x1)])
+        %   disp(["Len of max_x1: ", length(max_x1)]);
+        %   disp(["Size of subset: ", size(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))])
+        %   disp("============================")
+
+        %   if cj == 31 && ci == 37
+        %     printed = printed + 1;
+        %     disp(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))
+        %   end
+        % end
+        
         if length(max_x1)>1
           max_x1=round(sum(max_x1.*(1:length(max_x1))')./sum(max_x1));
           max_y1=round(sum(max_y1.*(1:length(max_y1))')./sum(max_y1));
@@ -63,12 +78,6 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
           max_x1=nan;
           max_y1=nan;
         end
-        
-        % if printed == 0
-        %   disp(max_x1);
-        %   disp(max_y1);
-        %   printed = printed + 1;
-        % end
 
         % store the displacements in variable datax/datay
         datax(cj,ci)=-(max_x1-(M))+idx(cj,ci);
@@ -146,9 +155,10 @@ datax=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))))
 datay=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))));
 % ------------------------------------------------------------------------------
 
-for i=1:iter-1
-  disp(['iter ' num2str(i) ' of ' num2str(iter)]);
-  x = firstpass(A, B, wins(1, :), overlap, datax, datay);
-end
+% for i=1:iter-1
+  % disp(['iter ' num2str(i) ' of ' num2str(iter)]);
+  [x,y,datax,datay] = firstpass(A, B, wins(1, :), overlap, datax, datay);
+  % disp(datay);
+% end
 
 % ------ TEST ZONE ------

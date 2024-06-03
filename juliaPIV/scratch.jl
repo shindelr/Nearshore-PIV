@@ -1,32 +1,81 @@
-A = [1 2 3 4 5;
-16 2 3 13 2;
-5 11 10 8 9;  
-9 7 6 12 4;
-4 14 15 1 7
-]
+function firstpass(A, B, N, overlap, idx, idy)
+    M = N[1]; N = N[2]
+    sy, sx = size(A)
+    xx = zeros(ceil((size(A, 1) - N) / ((1 - overlap) * N)) + 1, ceil((size(A, 2) - M) / ((1 - overlap) * M)) + 1)
+    yy = similar(xx)
+    datax = similar(xx)
+    datay = similar(xx)
+    IN = zeros(size(A))
 
-B = [3 4 5 6 7;
-8 9 10 11 12;
-13 14 15 16 17;
-18 19 20 21 22;
-23 24 25 26 27
-]
+    cj = 1
+    for jj in 1:((1 - overlap) * N):sy - N + 1
+        ci = 1
+        for ii in 1:((1 - overlap) * M):sx - M + 1
+            if IN[jj + div(N, 2), ii + div(M, 2)] != 1
+                if isnan(idx[cj, ci])
+                    idx[cj, ci] = 0
+                end
+                if isnan(idy[cj, ci])
+                    idy[cj, ci] = 0
+                end
+                if jj + idy[cj, ci] < 1
+                    idy[cj, ci] = 1 - jj
+                elseif jj + idy[cj, ci] > sy - N + 1
+                    idy[cj, ci] = sy - N + 1 - jj
+                end
+                if ii + idx[cj, ci] < 1
+                    idx[cj, ci] = 1 - ii
+                elseif ii + idx[cj, ci] > sx - M + 1
+                    idx[cj, ci] = sx - M + 1 - ii
+                end
 
-pivwin = 16
-log2pivwin = log2(pivwin)
-if log2pivwin - round(log2pivwin) != 0
-    error("pivwin must be factor of 2")
+                C = A[jj:jj + N - 1, ii:ii + M - 1]
+                D = B[jj + idy[cj, ci]:jj + N - 1 + idy[cj, ci], ii + idx[cj, ci]:ii + M - 1 + idx[cj, ci]]
+                C .-= mean(C)
+                D .-= mean(D)
+                stad1 = std(C)
+                stad2 = std(D)
+
+                if stad1 == 0
+                    stad1 = NaN
+                end
+                if stad2 == 0
+                    stad2 = NaN
+                end
+
+                R = xcorrf2(C, D) / (N * M * stad1 * stad2)
+
+                if size(R, 1) == N - 1
+                    max_y1, max_x1 = findmax(R)
+                else
+                    max_y1, max_x1 = findmax(R[div(N, 2) + 2:div(3 * N, 2) - 3, div(M, 2) + 2:div(3 * M, 2) - 3])
+                end
+
+                if length(max_x1) > 1
+                    max_x1 = round(Int, sum(max_x1 .* (1:length(max_x1))) / sum(max_x1))
+                    max_y1 = round(Int, sum(max_y1 .* (1:length(max_y1))) / sum(max_y1))
+                elseif isempty(max_x1)
+                    idx[cj, ci] = NaN
+                    idy[cj, ci] = NaN
+                    max_x1 = NaN
+                    max_y1 = NaN
+                end
+
+                datax[cj, ci] = -(max_x1 - M) + idx[cj, ci]
+                datay[cj, ci] = -(max_y1 - N) + idy[cj, ci]
+                xx[cj, ci] = ii + div(M, 2)
+                yy[cj, ci] = jj + div(N, 2)
+                ci += 1
+            else
+                xx[cj, ci] = ii + div(M, 2)
+                yy[cj, ci] = jj + div(N, 2)
+                datax[cj, ci] = NaN
+                datay[cj, ci] = NaN
+                ci += 1
+            end
+        end
+        cj += 1
+    end
+    return xx, yy, datax, datay
 end
-pass_sizes = 2 .^ collect(6:-1:log2pivwin)
-push!(pass_sizes, pass_sizes[end]) # Duplicate final element
-pass_sizes = [pass_sizes pass_sizes] # Convert vector to matrix
-dt = 1; overlap = 0.5; validvec = 3
-A = convert(Matrix{Float64}, A)
-B = convert(Matrix{Float64}, B)
-sy, sx = size(A)
-iter = size(pass_sizes, 1)
 
-data_dim_1 = floor(Int64, (sy/(pass_sizes[1,1] * 1-overlap)))
-data_dim_2 = floor(Int64, (sx/(pass_sizes[1,2]*(1-overlap)))) 
-datax = zeros(eltype(A), (data_dim_1, data_dim_2))
-datay = zeros(eltype(A), (data_dim_1, data_dim_2))
