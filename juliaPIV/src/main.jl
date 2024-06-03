@@ -153,25 +153,46 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 end
 
                 # Find position of maximal value of R
+                # Find max returns a CartesianIndex object which is a little
+                # hard to work with, so convert it to a Tuple and unpack.
                 if size(R, 1) == (N-1)
-                    max_y1, max_x1 = findmax(R)
+                    max_val, max_coords = findmax(R)
+                    max_y1, max_x1 = Tuple(max_coords)
                 else
-                    max_y1, max_x1 = findmax(R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
-                                              Int(floor(.5*M+2)):Int(floor(1.5*M-3))])
+                    max_val, max_coords = findmax(
+                                    R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
+                                    Int(floor(.5*M+2)):Int(floor(1.5*M-3))])
+                    max_y1, max_x1 = Tuple(max_coords)
                 end
-                println(max_y1, max_x1)
 
-                
-                ci=ci+1;  # This placement will need to be adjusted
+                if length(max_x1) > 1
+                    max_x1 = round(sum(max_x1 .* (1:length(max_x1))') / sum(max_x1))
+                    max_y1 = round(sum(max_y1 .* (1:length(max_y1))') / sum(max_y1))
+                elseif isempty(max_x1)
+                    idx[cj, ci] = NaN
+                    idy[cj, ci] = NaN
+                    max_x1 = max_y1 = NaN
+                end
+
+                # Store displacements in variables datax/datay
+                datax[cj, ci] -= (max_x1-M) + idx[cj,ci]
+                datay[cj, ci] -= (max_y1-M) + idy[cj,ci]
+                xx[cj, ci] = ii + M/2
+                yy[cj, ci] = jj + N/2
+                ci += 1
+
+            else
+                xx[cj, ci] = ii + M/2
+                yy[cj, ci] = jj + N/2
+                datax[cj, ci] = NaN
+                datay[cj, ci] = NaN
+                ci += 1
             end
-            cj += 1
         end
+
+        cj += 1
     end
-
-
-    # Dummy values
-    x=0; y=0;
-    return x, y, datax, datay
+    return xx, yy, datax, datay
 end
 
 
@@ -303,43 +324,10 @@ end
 
 
 # ------ TEST ZONE ------
-
-# A = [
-#     38 28 14 42 7 20 38 18 22 10;
-#     10 23 35 39 23 2 21 1 23 43;
-#     29 37 1 20 32 11 21 43 24 48;
-#     26 41 27 15 14 46 50 43 2 36;
-#     50 6 20 8 38 17 3 24 13 49;
-#     8 25 1 19 27 46 6 43 7 46;
-#     34 13 16 35 49 39 3 1 5 41;
-#     3 28 17 25 43 33 9 35 13 30;
-#     47 14  7 13 22 39 20 15 44 17;
-#     46 23 25 24 44 40 28 14 44  0
-# ]
-
-# Generate a matrix of random values
-# A = rand(2048, 3072)
-# B = A .+ 2
-
-# B = [
-#     46 34 22 49 7 27 45 28 24 10;
-#     17 25 37 39 33 6 30 7 32 51;
-#     35 45  8 21 32 17 27 50 28 50;
-#     33 46 37 17 14 48 54 45 2 40;
-#     59 12 26 18 46 26 12 26 19 49;
-#     11 28  5 25 33 56 9 49 17 48;
-#     39 14 25 43 53 44 6 11 14 47;
-#     11 34 17 25 51 43 17 38 21 32;
-#     53 19 14 23 30 43 20 17 53 24;
-#     56 28 32 32 47 40 28 23 47 6
-# ]
-
 im1_path = "juliaPIV/data/im1.jpg"
 im2_path = "juliaPIV/data/im2.jpg"
 A = load(im1_path)
 B = load(im2_path)
-# mosaicview(A, B; nrows=1)
-
 
 @time main(A, B)
 # ------ TEST ZONE ------

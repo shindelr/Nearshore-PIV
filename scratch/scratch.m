@@ -10,7 +10,7 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
   datay=xx; 
   IN=zeros(size(A));
 
-  
+  % printed = 0;
   cj=1;
   for jj=1:((1-overlap)*N):sy-N+1
     ci=1;
@@ -53,9 +53,7 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
         else
           [max_y1,max_x1]=find(R==max(max(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))));
         end
-        disp(max_y1);
-        disp(max_x1);
-        
+        % disp(max_y1);
         if length(max_x1)>1
           max_x1=round(sum(max_x1.*(1:length(max_x1))')./sum(max_x1));
           max_y1=round(sum(max_y1.*(1:length(max_y1))')./sum(max_y1));
@@ -65,6 +63,12 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
           max_x1=nan;
           max_y1=nan;
         end
+        
+        % if printed == 0
+        %   disp(max_x1);
+        %   disp(max_y1);
+        %   printed = printed + 1;
+        % end
 
         % store the displacements in variable datax/datay
         datax(cj,ci)=-(max_x1-(M))+idx(cj,ci);
@@ -122,38 +126,10 @@ end
 
 
 % ------ TEST ZONE ------
-% A = [
-%     38, 28, 14, 42, 7, 20, 38, 18, 22, 10;
-%     10, 23, 35, 39, 23, 2, 21, 1, 23, 43;
-%     29, 37, 1, 20, 32, 11, 21, 43, 24, 48;
-%     26, 41, 27, 15, 14, 46, 50, 43, 2, 36;
-%     50, 6, 20, 8, 38, 17, 3, 24, 13, 49;
-%     8, 25, 1, 19, 27, 46, 6, 43, 7, 46;
-%     34, 13, 16, 35, 49, 39, 3, 1, 5, 41;
-%     3, 28, 17, 25, 43, 33, 9, 35, 13, 30;
-%     47, 14, 7, 13, 22, 39, 20, 15, 44, 17;
-%     46, 23, 25, 24, 44, 40, 28, 14, 44, 0
-% ];
-
-% B = [
-%     46, 34, 22, 49, 7, 27, 45, 28, 24, 10;
-%     17, 25, 37, 39, 33, 6, 30, 7, 32, 51;
-%     35, 45, 8, 21, 32, 17, 27, 50, 28, 50;
-%     33, 46, 37, 17, 14, 48, 54, 45, 2, 40;
-%     59, 12, 26, 18, 46, 26, 12, 26, 19, 49;
-%     11, 28, 5, 25, 33, 56, 9, 49, 17, 48;
-%     39, 14, 25, 43, 53, 44, 6, 11, 14, 47;
-%     11, 34, 17, 25, 51, 43, 17, 38, 21, 32;
-%     53, 19, 14, 23, 30, 43, 20, 17, 53, 24;
-%     56, 28, 32, 32, 47, 40, 28, 23, 47, 6
-% ];
-
-% A = rand(2048, 3072);
-% B = A + 2;
 A=imread('data/im1.jpg');
 B=imread('data/im2.jpg');
 
-% JUST SET UP FOR FIRSTPASS
+% JUST SET UP FOR FIRSTPASS/MULTIPASSX
 % ------------------------------------------------------------------------------
 pivwin=16;
 log2pivwin=log2(pivwin);
@@ -170,10 +146,9 @@ datax=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))))
 datay=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))));
 % ------------------------------------------------------------------------------
 
-% for i=1:iter-1
-%   disp(['iter ' num2str(i) ' of ' num2str(iter)]);
-x = firstpass(A, B, wins(1, :), overlap, datax, datay);
-%   disp('Done');
-% end
+for i=1:iter-1
+  disp(['iter ' num2str(i) ' of ' num2str(iter)]);
+  x = firstpass(A, B, wins(1, :), overlap, datax, datay);
+end
 
 % ------ TEST ZONE ------
