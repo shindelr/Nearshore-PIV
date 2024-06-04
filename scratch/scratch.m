@@ -78,7 +78,6 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
     cj=cj+1;
   end
 end
-
 % -----------------------------------------------
 % -----------------------------------------------
 function c = xcorrf2(a,b,pad)
@@ -117,7 +116,143 @@ function c = xcorrf2(a,b,pad)
     c=(c(1:end-1,1:end-1));
   end
 end
+% -----------------------------------------------
+% -----------------------------------------------
+function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
+  IN=zeros(size(u));
 
+  if nargin < 5
+      disp(' Not enough input arguments!'); return
+  end
+  if ischar(threshold)
+      disp(' Please give threshold as numeric input'); return
+  end
+
+  if nargin > 5
+      tm=cellfun('isclass',varargin,'double'); 
+      pa=find(tm==1); 
+      if ~isempty(pa)
+        m=cat(1,varargin{pa}); 
+      else
+        m=3; 
+      end 
+      if any(strcmp(varargin,'median'))
+          method='mnanmedian'; stat='median'; ff=1;
+
+      elseif any(strcmp(varargin,'mean'))
+          method='mnanmean'; stat='mean'; ff=2;
+      end  
+      if ~any(strcmp(varargin,'mean')) & ~any(strcmp(varargin,'median'))
+          method='mnanmedian'; stat='median';
+      end
+      if nargin==8
+          maske=varargin{end}; 
+          if ischar(maske) & ~isempty(maske)
+            maske=load(maske); 
+            maske=maske.maske; 
+          end
+
+          if ~isempty(maske)
+            for ii=1:length(maske) 
+              IN2=inpolygon(x,y,maske(ii).idxw,maske(ii).idyw);
+              IN=[IN+IN2];
+            end
+            
+          else 
+            IN=zeros(size(u)); 
+          end
+      end
+  end
+
+  if nargin==5
+      m=3; method='mnanmedian'; stat='median';
+  end
+  nu = zeros(size(u) + 2 * floor(m/2)) * nan;
+  nv = zeros(size(u) + 2 * floor(m/2)) * nan;
+  nu(floor(m/2) + 1:end - floor(m/2), floor(m/2) + 1:end - floor(m/2)) = u;
+  nv(floor(m/2) + 1:end - floor(m/2), floor(m/2) + 1:end - floor(m/2)) = v;
+  
+  INx=zeros(size(nu));
+  INx(floor(m/2) + 1:end - floor(m/2), floor(m/2) + 1:end - floor(m/2)) = IN;
+  writematrix(INx, "../tests/mlabOut/mtestINx.csv");  
+
+  % prev=isnan(nu); previndx=find(prev==1); 
+  % U2=nu+i*nv; teller=1; [ma,na]=size(U2); histo=zeros(size(nu));
+  % histostd=zeros(size(nu));hista=zeros(size(nu));histastd=zeros(size(nu));
+  % fprintf([' Local ',stat,' filter running: '])
+
+  % for ii=m-1:1:na-m+2  
+  %     for jj=m-1:1:ma-m+2
+  %         if INx(jj,ii)~=1
+              
+  %             tmp=U2(jj-floor(m/2):jj+floor(m/2),ii-floor(m/2):ii+floor(m/2)); 
+  %             tmp(ceil(m/2),ceil(m/2))=NaN;
+  % Check your method booleans here in Julia.
+  %             if ff==1
+  %                 usum=mnanmedian(tmp(:));
+  %             elseif ff==2
+  %                 usum=mnanmean(tmp(:));
+  %             end
+  %             histostd(jj,ii)=mnanstd(tmp(:));
+  %         else
+  %             usum=nan; tmp=NaN; histostd(jj,ii)=nan;
+  %         end
+  % %         u1=real(usum).^2 - real(U2(jj,ii)).^2;
+  % %         v1=imag(usum).^2 - imag(U2(jj,ii)).^2;
+  % %         
+  % %         histo(jj,ii)=u1+i*v1;
+  %         histo(jj,ii)=usum;
+  %         %histostd(jj,ii)=mnanstd(real(tmp(:))) + i*mnanstd(imag(tmp(:)));
+          
+  %         %th1=angle(usum); th2=angle(U2(jj,ii));
+  %         %if th1<0, th1=2*pi+th1; end
+  %         %if th2<0, th2=2*pi+th2; end
+  %         %hista(jj,ii)=(th1-th2);
+  %         %if hista(jj,ii)<0, hista(jj,ii)=2*pi+hista(jj,ii); end 
+  %         %histastd(jj,ii)=mnanstd(abs(angle(tmp(:))));
+  %     end
+  %     fprintf('.')
+      
+  % end
+
+  % %%%%%%%% Locate gridpoints with a higher value than the threshold 
+
+  % %[cy,cx]=find((real(histo)>threshold*real(histostd) | ...
+  % %    imag(histo)>threshold*imag(histostd)));
+  % [cy,cx]=find( ( real(U2)>real(histo)+threshold*real(histostd) |...
+  %     imag(U2)>imag(histo)+threshold*imag(histostd) |...
+  %     real(U2)<real(histo)-threshold*real(histostd) |...
+  %     imag(U2)<imag(histo)-threshold*imag(histostd) ) );
+
+  % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+  % for jj=1:length(cy)
+  %     %uv2(jj)=u(cy(jj),cx(jj)); vv2(jj)=v(cy(jj),cx(jj));
+  %     %xv2(jj)=x(cy(jj),cx(jj)); yv2(jj)=y(cy(jj),cx(jj));
+  %     % Now we asign NotANumber (NaN) to all the points in the matrix that
+  %     % exceeds our threshold.
+  %     nu(cy(jj),cx(jj))=NaN;  nv(cy(jj),cx(jj))=NaN;
+  % end
+
+  % rest=length(cy);
+
+  % rest2=sum(isnan(u(:)))-sum(prev(:));
+  % fprintf([num2str(rest),' vectors changed'])
+  % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  % % Now we check for NaN's and interpolate where they exist
+  % if any(strcmp(varargin,'interp'))
+  %     if any(isnan(u(:)))
+  %         [nu,nv]=naninterp(nu,nv);
+  %     end
+  % end
+  % hu=nu(ceil(m/2):end-floor(m/2),ceil(m/2):end-floor(m/2));
+  % hv=nv(ceil(m/2):end-floor(m/2),ceil(m/2):end-floor(m/2));
+  % fprintf('.\n')
+
+  % Dummies
+  hu = 0;
+  hv = 0;
+end
 
 % ------ TEST ZONE ------
 A=imread('data/im1.jpg');
@@ -138,15 +273,49 @@ B=double(B);
 iter=size(wins,1);
 datax=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))));
 datay=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))));
+sensit = 3;
 % ------------------------------------------------------------------------------
-
+% ------------------------------------------------------------------------------
+% function Multipassx technically
+% Loop disabled for testing
 % for i=1:iter-1
-  % disp(['iter ' num2str(i) ' of ' num2str(iter)]);
-  [x,y,datax,datay] = firstpass(A, B, wins(1, :), overlap, datax, datay);
-  writematrix(x, 'mtestX.csv');
-  writematrix(y, 'mtestY.csv');
-  writematrix(datax, 'mtestDATAX.csv');
-  writematrix(datay, 'mtestDATAY.csv');
-% end
+    % disp(['iter ' num2str(i) ' of ' num2str(iter)]);
+    [x,y,datax,datay] = firstpass(A, B, wins(1, :), overlap, datax, datay);
+
+  % validation
+  [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
+  % [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
+  % datax=floor(datax);
+  % datay=floor(datay);
+
+  % % expand the velocity data to twice the original size
+  % if(i~=iter-1)
+  %   if wins(i,1)~=wins(i+1,1)
+  %     X=(1:((1-overlap)*2*wins(i+1,1)):sx-2*wins(i+1,1)+1) + wins(i+1,1);
+  %     XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+  %   else
+  %     XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+  %     X=XI;
+  %   end
+  %   if wins(i,2)~=wins(i+1,2)
+  %     Y=(1:((1-overlap)*2*wins(i+1,2)):sy-2*wins(i+1,2)+1) + wins(i+1,2);
+  %     YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+  %   else
+  %     YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+  %     Y=YI; 
+  %   end
+  %   datax=round(interp2(X,Y',datax,XI,YI'));
+  %   datay=round(interp2(X,Y',datay,XI,YI'));
+  %   [datax,datay]=naninterp(datax,datay,'linear',[],...
+  %                           repmat(XI,size(datax,1),1),...
+  %                           repmat(YI',1,size(datax,2)));  % TODO simplify!
+  %   datax=round(datax);
+  %   datay=round(datay);
+  % end
+  % end
+  % writematrix(x, 'mtestX.csv');
+  % writematrix(y, 'mtestY.csv');
+  % writematrix(datax, "../tests/mlabOut/mtestDATAX.csv");
+  % writematrix(datay, "../tests/mlabOut/mtestDATAY.csv");
 
 % ------ TEST ZONE ------

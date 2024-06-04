@@ -18,10 +18,6 @@ datay=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))))
 for i=1:iter-1
   disp(['iter ' num2str(i) ' of ' num2str(iter)])
 
-  % Seems like a good place to use plan_fft in julia, each iteration
-  % is a different window size, so do it here. Then again before final
-  % pass.
-
   % PIV
   % func sig: firstpass(A,B,N,overlap,idx,idy)
   [x,y,datax,datay]=firstpass(A,B,wins(i,:),overlap,datax,datay);  %two functions to complete in here.

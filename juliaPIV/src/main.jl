@@ -38,6 +38,7 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     datay = zeros(eltype(A), (data_dim_1, data_dim_2))
 
     # Disabled loop for testing
+    # Getting slight errors on datay and datax. Last test showed 5 differences.
     
     # for i in 1:iter-1
         # println("Iter ", i, " of ", iter )
@@ -46,9 +47,12 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
         x, y, datax, datay = firstpass(A, B, wins[1, :], overlap, datax, datay)
         # writedlm("juliaPIV/tests/testX.csv", x, ',')
         # writedlm("juliaPIV/tests/testY.csv", y, ',')
-        # writedlm("juliaPIV/tests/testDATAX.csv", datax, ',')
-        # writedlm("juliaPIV/tests/testDATAY.csv", datay, ',')
+        # writedlm("tests/juliaOut/testDATAX.csv", datax, ',')
+        # writedlm("tests/juliaOut/testDATAY.csv", datay, ',')
+
+        datax, datay = localfilt(x, y, datax, datay, sensit)
     # end
+
 
     # Dummy values
     x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
@@ -313,8 +317,64 @@ end
 
 """
 ### localfilt
-
+    Filter out vectors that deviate from the median or the mean of their \
+    surrounding neighbors by the factor `threshold` times the standard \
+    deviation of the neighbors.\n
+    Parameters:
+    -----------
+    - x, y, u, v : `Matrices`
+    - threshold : `Int`
+        Specifies the point at which a vector has deviated too 
+        far from the specified statistical mean or median.
+    - median, mean : `Bool`
+        If true, specifies that the median should be the turning
+        point for the data to be filtered out on. Median defaults
+        to true, while mean defaults to false. Only specify one
+        method.
+    - m : `Int`
+        Defines the number of vectors contributing to the median 
+        or mean value of each vector. Defaults to 3, though the
+        original implementation mentions that 5 is a good number
+        too. Also known as "kernelsize"
+    - mask : `Matrix`
+        Use to mask out areas of the given matrices to improve
+        computation times. Default to an empty matrix.
+    Returns:
+    --------
+    - hu, hv : `Matrices`
+            Successfully filtered matrices. New versions of u
+            and v.
 """
+function localfilt(x, y, u, v, threshold, median=true, mean=false, m=3, mask=[])
+    
+    IN = zeros(eltype(u), size(u))
+    # !!!! Should handle mask being a file here !!!! #
+
+    nu_dim1 = round(Int, size(u, 1) + 2 * floor(m/2))
+    nu_dim2 = round(Int, size(u, 2) + 2 * floor(m/2))
+    nu = zeros(eltype(u), (nu_dim1, nu_dim2)) * NaN
+    nv = similar(nu) * NaN
+    
+    # Transfer over data
+    from_cols = round(Int, floor(m/2) + 1)
+    minus_rows = round(Int, floor(m/2))
+    nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
+    nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
+
+    # Testing: same five errors detected from before with datax, datay
+    # writedlm("tests/juliaOut/JtestNV.csv", nv, ',')
+    
+    INx = zeros(eltype(nu), size(nu))
+    INx[from_cols: end - minus_rows, from_cols: end - minus_rows] = IN
+    # Testing: Success!
+    # writedlm("tests/juliaOut/JtestINx.csv", INx, ',')
+
+    
+
+    # Dummy values
+    hu = 0; hv = 0
+    return hu, hv
+end
 
 """
 ### Main Entry
