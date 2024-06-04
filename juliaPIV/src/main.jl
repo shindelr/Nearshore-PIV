@@ -2,6 +2,7 @@ using FFTW
 using Statistics
 using Images
 using FileIO
+using DelimitedFiles
 
 # PASS FUNCTIONS
 """
@@ -36,13 +37,17 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = zeros(eltype(A), (data_dim_1, data_dim_2))
 
+    # Disabled loop for testing
+    
     # for i in 1:iter-1
         # println("Iter ", i, " of ", iter )
         # PIV proper
         # x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
         x, y, datax, datay = firstpass(A, B, wins[1, :], overlap, datax, datay)
-        display(datay)
-
+        # writedlm("juliaPIV/tests/testX.csv", x, ',')
+        # writedlm("juliaPIV/tests/testY.csv", y, ',')
+        # writedlm("juliaPIV/tests/testDATAX.csv", datax, ',')
+        # writedlm("juliaPIV/tests/testDATAY.csv", datay, ',')
     # end
 
     # Dummy values
@@ -149,52 +154,51 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                     R = xcorrf2(C, D, P, false) ./ ( N * M * stad1 * stad2)
                 end
                 
-                # Find position of maximal value of R
-                # findmax returns a CartesianIndex object which is a little
-                # hard to work with, so convert it to a Tuple and unpack.
-                if size(R, 1) == (N - 1)
-                    # max_val, max_coords = findmax(R)
-                    max_val = maximum(R)
-                    max_indices = findall(x -> x == max_val, R)
-                    max_y1, max_x1 = Tuple(max_indices[1])
-                else
-                    max_val, max_coords = findmax(
-                                    R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
-                                    Int(floor(.5*M+2)):Int(floor(1.5*M-3))])
-                    max_y1, max_x1 = Tuple(max_coords)
-                    # subset =  R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
-                    #             Int(floor(.5*M+2)):Int(floor(1.5*M-3))]
-                    # max_val = maximum(R)
-                    # max_indices = findall(x -> x == max_val, subset)
-                    # max_y1, max_x1 = Tuple(max_indices[1])
-                    max_y1 += Int(0.5*N+1)
-                    max_x1 += Int(0.5*M+1)
 
-                    # if !printed
-                    #     println("============================")
-                    #     println("here on iter: ", cj, " ", ci)
-                    #     println("OG indices: ", max_coords)
-                    #     println("Max Coords after shift: ", max_x1, " ", max_y1)
-                    #     println("Max Val: ", max_val)
-                    #     # println("Size of subset: ", size(subset))
-                    #     # println("Len of max_x1: ",length(max_x1))
-                    #     println("============================")
-                        
-                    #     if cj == 31 && ci == 37
-                    #         printed = true
-                    #         # display(subset)
-                    #     end
-                    # end
+            """
+                This was super tricky! Matlab and Julia have quite different 
+                implementations in this region. 
+                Julia has this findall function with a really nifty arrow syntax, 
+                but using it returns a strange vector of CartesianIndex objects that 
+                are pretty tough to work with. To handle it, I had to use some weird 
+                tuple unpacking operations and list comprehension that matlab didn't
+                need. I wonder how true Julia users would have done this section.
+            """
+                
+                # Find position of maximal value of R
+                if size(R, 1) == (N - 1)
+                    max = maximum(R)
+                    max_coords = findall(x -> x == max, R)
+                else
+                    subset = R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
+                                Int(floor(.5*M+2)):Int(floor(1.5*M-3))]
+                    max = maximum(R)
+                    max_coords = findall(x -> x == max, subset)
+                    max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
                 end
 
-                
-                if length(max_x1) > 1
-                    max_x1 = round(Int, sum(max_x1 .* (1:length(max_x1))') / sum(max_x1))
-                    max_y1 = round(Int, sum(max_y1 .* (1:length(max_y1))') / sum(max_y1))
-                elseif isempty(max_x1)
+                # Handle a vector that has multiple maximum coordinates.
+                # Sum the product of each x and y indice with its own indice within
+                # the max_coords vector.
+                if length(max_coords) > 1
+
+                    max_x1 = round(
+                        Int, sum([c[2] * i for (c, i) in enumerate(max_coords)]) / 
+                        sum([c[2] for c in max_coords]))
+                    max_y1 = round(
+                        Int, sum([c[1] * i for (c, i) in enumerate(max_coords)]) / 
+                        sum([c[1] for c in max_coords]))
+
+                # Handle empty max_coords vector.
+                elseif isempty(max_coords)
                     idx[cj, ci] = NaN
                     idy[cj, ci] = NaN
-                    max_x1 = max_y1 = NaN
+                    max_x1 = NaN
+                    max_y1 = NaN
+                
+                # Otherwise, unpack into max coordinates to be used in code below.
+                else
+                    max_y1, max_x1 = max_coords[1]
                 end
 
                 # Store displacements in variables datax/datay

@@ -54,21 +54,6 @@ function [xx,yy,datax,datay]=firstpass(A,B,N,overlap,idx,idy)
           [max_y1,max_x1]=find(R==max(max(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))));
         end
 
-        % if printed == 0
-        %   disp("============================")
-        %   disp(["here on iter: ", cj, ci]);
-        %   disp(["Max Coords: ", max_x1, max_y1]);
-        %   disp(["Max val: ", R(max_y1, max_x1)])
-        %   disp(["Len of max_x1: ", length(max_x1)]);
-        %   disp(["Size of subset: ", size(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))])
-        %   disp("============================")
-
-        %   if cj == 31 && ci == 37
-        %     printed = printed + 1;
-        %     disp(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))
-        %   end
-        % end
-        
         if length(max_x1)>1
           max_x1=round(sum(max_x1.*(1:length(max_x1))')./sum(max_x1));
           max_y1=round(sum(max_y1.*(1:length(max_y1))')./sum(max_y1));
@@ -158,7 +143,10 @@ datay=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))))
 % for i=1:iter-1
   % disp(['iter ' num2str(i) ' of ' num2str(iter)]);
   [x,y,datax,datay] = firstpass(A, B, wins(1, :), overlap, datax, datay);
-  % disp(datay);
+  writematrix(x, 'mtestX.csv');
+  writematrix(y, 'mtestY.csv');
+  writematrix(datax, 'mtestDATAX.csv');
+  writematrix(datay, 'mtestDATAY.csv');
 % end
 
 % ------ TEST ZONE ------
