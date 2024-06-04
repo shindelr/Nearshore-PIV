@@ -1,8 +1,8 @@
-using FFTW
-using Statistics
-using Images
-using FileIO
-using DelimitedFiles
+using FFTW            # Fast Fourier Transforms library built on C
+using Statistics      # Stats obv.
+using Images          # Basic image processing library
+using FileIO          # I/O library
+using DelimitedFiles  # Write matrices to CSV
 
 # PASS FUNCTIONS
 """
@@ -56,6 +56,7 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
 
 end
 
+# Should break up this func into multiple functions. It's huge!
 """
 ### firstpass
 *Note: First pass is a misnomer for this function, as it's called N-1 times
@@ -349,7 +350,6 @@ function main(A, B)
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     println("\n===============\nExiting now\n===============")
 end
-
 
 
 # ------ TEST ZONE ------
