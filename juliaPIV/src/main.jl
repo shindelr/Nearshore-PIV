@@ -367,9 +367,18 @@ function localfilt(x, y, u, v, threshold, median=true, mean=false, m=3, mask=[])
     INx = zeros(eltype(nu), size(nu))
     INx[from_cols: end - minus_rows, from_cols: end - minus_rows] = IN
     # Testing: Success!
-    # writedlm("tests/juliaOut/JtestINx.csv", INx, ',')
-
     
+    # Could be a little problem area here. Not sure these vars are used.
+    prev = isnan.(nu)
+    previndex = findall(prev)
+    
+    U2 = nu .+ im .* nv
+    # Testing: Looks okay, but might not be. 
+    ma, na = size(U2)
+    histo = zeros(eltype(nu), size(nu))
+    histostd = hista = histastd = similar(nu)
+
+    println("Local median filter running: ") ? median : println("Local mean filter running: ")
 
     # Dummy values
     hu = 0; hv = 0

@@ -174,12 +174,21 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
   
   INx=zeros(size(nu));
   INx(floor(m/2) + 1:end - floor(m/2), floor(m/2) + 1:end - floor(m/2)) = IN;
-  writematrix(INx, "../tests/mlabOut/mtestINx.csv");  
+  
+  prev = isnan(nu); 
+  previndx = find(prev==1); 
+  U2 = nu + i * nv;
+  % writematrix(U2, "../tests/mlabOut/mtestU2.csv");  
 
-  % prev=isnan(nu); previndx=find(prev==1); 
-  % U2=nu+i*nv; teller=1; [ma,na]=size(U2); histo=zeros(size(nu));
-  % histostd=zeros(size(nu));hista=zeros(size(nu));histastd=zeros(size(nu));
-  % fprintf([' Local ',stat,' filter running: '])
+  teller = 1; 
+  [ma, na] = size(U2); 
+  histo = zeros(size(nu));
+
+  histostd = zeros(size(nu));
+  hista = zeros(size(nu));
+  histastd = zeros(size(nu));
+
+  fprintf([' Local ',stat,' filter running: '])
 
   % for ii=m-1:1:na-m+2  
   %     for jj=m-1:1:ma-m+2
