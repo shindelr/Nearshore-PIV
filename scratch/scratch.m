@@ -199,19 +199,20 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
               tmp=U2(jj-floor(m/2):jj+floor(m/2), ii-floor(m/2):ii+floor(m/2)); 
               tmp(ceil(m/2),ceil(m/2))=NaN;
 
-              
               if ff==1
                 usum=mnanmedian(tmp(:));
               elseif ff==2
                 usum=mnanmean(tmp(:));
               end
               histostd(jj,ii)=mnanstd(tmp(:));
-              % if printed == 0
-              %   disp(tmp(:));
-              %   disp(histostd(jj, ii));
-              %   printed = printed + 1;
-              %   % disp(size(tmp));
-              % end
+              if printed <= 10
+                disp(["====================="])
+                disp(["Here on ", ii, jj]);
+                disp(["usum: ", usum]);
+                disp(["histostd[j, i]: ", histostd(jj, ii)]);
+                disp(["====================="])
+                printed = printed + 1;
+              end
           else
               usum=nan; tmp=NaN; histostd(jj,ii)=nan;
           end
@@ -233,16 +234,16 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
       
   end
 
-  % %%%%%%%% Locate gridpoints with a higher value than the threshold 
+  %%%%%%%% Locate gridpoints with a higher value than the threshold 
 
-  % %[cy,cx]=find((real(histo)>threshold*real(histostd) | ...
-  % %    imag(histo)>threshold*imag(histostd)));
+  %[cy,cx]=find((real(histo)>threshold*real(histostd) | ...
+  %    imag(histo)>threshold*imag(histostd)));
   % [cy,cx]=find( ( real(U2)>real(histo)+threshold*real(histostd) |...
   %     imag(U2)>imag(histo)+threshold*imag(histostd) |...
   %     real(U2)<real(histo)-threshold*real(histostd) |...
   %     imag(U2)<imag(histo)-threshold*imag(histostd) ) );
 
-  % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
   % for jj=1:length(cy)
   %     %uv2(jj)=u(cy(jj),cx(jj)); vv2(jj)=v(cy(jj),cx(jj));

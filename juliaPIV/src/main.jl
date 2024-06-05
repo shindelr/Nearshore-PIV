@@ -382,9 +382,10 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     U2 = nu .+ im .* nv
     # Testing: U2 Looks okay, but might not be, it's hard to tell with im's. 
     ma, na = size(U2)
-    histo = zeros(ComplexF64, size(nu))
-    histostd = hista = histastd = similar(nu)
+    histostd = histo = zeros(ComplexF64, size(nu))
+    hista = histastd = similar(nu)
 
+    printed = 0
     iter = ProgressBar(m - 1:na - m + 2)
     for p in iter  # Looks gnar, but just a bar!
         for ii in m - 1:1:na - m + 2
@@ -402,7 +403,17 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
                     # !!!!!!!! NEEDS TESTING STILL !!!!!!!! #
                     # Run the appropriate stat depending on method arg.
                     usum = median_bool ? im_median(usum_prep) : mean(usum_prep)
-                    histostd[jj, ii] = std(usum_prep)
+                    histostd[jj, ii] = im_std(usum_prep)
+
+                    if printed <= 10
+                        println("=======================")
+                        println("Here on ", ii, " ", jj)
+                        println("usum: ", usum)
+                        println("histostd[j, i]: ", histostd[jj, ii])
+                        println("=======================")
+                        printed += 1
+                    end
+
                 else
                     usum = tmp = histostd[jj, ii] = NaN
                 end
@@ -431,6 +442,35 @@ function im_median(collection)
     end
     real_part = median(real.(collection))
     im_part = median(imag.(collection))
+    return real_part + im_part * im
+end
+
+
+"""
+### im_mean
+    Find the mean of the argued collection of complex numbers.
+    If the collection is empty, returns NaN.
+"""
+function im_mean(collection)
+    if length(collection) < 1
+        return NaN
+    end
+    real_part = mean(real.(collection))
+    im_part = mean(imag.(collection))
+    return real_part + im_part * im
+end
+
+"""
+### im_median
+    Find the std dev of the argued collection of complex numbers.
+    If the collection is empty, returns NaN.
+"""
+function im_std(collection)
+    if length(collection) < 1
+        return NaN
+    end
+    real_part = std(real(collection), corrected=false)
+    im_part = std(imag(collection), corrected=false)
     return real_part + im_part * im
 end
 
