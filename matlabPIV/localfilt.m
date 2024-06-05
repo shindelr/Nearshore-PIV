@@ -98,19 +98,19 @@ for ii=m-1:1:na-m+2
         else
             usum=nan; tmp=NaN; histostd(jj,ii)=nan;
         end
-%         u1=real(usum).^2 - real(U2(jj,ii)).^2;
-%         v1=imag(usum).^2 - imag(U2(jj,ii)).^2;
-%         
-%         histo(jj,ii)=u1+i*v1;
-        histo(jj,ii)=usum;
-        %histostd(jj,ii)=mnanstd(real(tmp(:))) + i*mnanstd(imag(tmp(:)));
+        % u1=real(usum).^2 - real(U2(jj,ii)).^2;
+        % v1=imag(usum).^2 - imag(U2(jj,ii)).^2;
         
-        %th1=angle(usum); th2=angle(U2(jj,ii));
-        %if th1<0, th1=2*pi+th1; end
-        %if th2<0, th2=2*pi+th2; end
-        %hista(jj,ii)=(th1-th2);
-        %if hista(jj,ii)<0, hista(jj,ii)=2*pi+hista(jj,ii); end 
-        %histastd(jj,ii)=mnanstd(abs(angle(tmp(:))));
+        % histo(jj,ii)=u1+i*v1;
+        histo(jj,ii)=usum;
+        % histostd(jj,ii)=mnanstd(real(tmp(:))) + i*mnanstd(imag(tmp(:)));
+        
+        % th1=angle(usum); th2=angle(U2(jj,ii));
+        % if th1<0, th1=2*pi+th1; end
+        % if th2<0, th2=2*pi+th2; end
+        % hista(jj,ii)=(th1-th2);
+        % if hista(jj,ii)<0, hista(jj,ii)=2*pi+hista(jj,ii); end 
+        % histastd(jj,ii)=mnanstd(abs(angle(tmp(:))));
     end
     fprintf('.')
     

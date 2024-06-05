@@ -1,11 +1,12 @@
 using FFTW            # Fast Fourier Transforms library built on C
-using Statistics      # Stats obv.
+using Statistics      
 using Images          # Basic image processing library
 using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
-using Skipper         # Special skipping library to skip NaNs
+using Skipper         # Special skipping library to skip NaNs and other things
+using ProgressBars    
 
-# PASS FUNCTIONS
+# PASS FUNCTIONS 
 """
 ### multipassx
     \n**:params:**\n
@@ -41,17 +42,19 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     # Disabled loop for testing
     # Getting slight errors on datay and datax. Last test showed 5 differences.
     
-    # for i in 1:iter-1
-        # println("Iter ", i, " of ", iter )
-        # PIV proper
-        # x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
-        x, y, datax, datay = firstpass(A, B, wins[1, :], overlap, datax, datay)
-        # writedlm("juliaPIV/tests/testX.csv", x, ',')
-        # writedlm("juliaPIV/tests/testY.csv", y, ',')
-        # writedlm("tests/juliaOut/testDATAX.csv", datax, ',')
-        # writedlm("tests/juliaOut/testDATAY.csv", datay, ',')
+    # for p in ProgressBars(1:iter - 1)
+        # for i in 1:iter-1
+            # println("Iter ", i, " of ", iter )
+            # PIV proper
+            # x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
+            x, y, datax, datay = firstpass(A, B, wins[1, :], overlap, datax, datay)
+            # writedlm("juliaPIV/tests/testX.csv", x, ',')
+            # writedlm("juliaPIV/tests/testY.csv", y, ',')
+            # writedlm("tests/juliaOut/testDATAX.csv", datax, ',')
+            # writedlm("tests/juliaOut/testDATAY.csv", datay, ',')
 
-        datax, datay = localfilt(x, y, datax, datay, sensit)
+            datax, datay = localfilt(x, y, datax, datay, sensit)
+        # end
     # end
 
 
@@ -349,7 +352,7 @@ end
             and v.
 """
 function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
-    
+    method =  median_bool ? "median" : "mean"
     IN = zeros(eltype(u), size(u))
     # !!!! Should handle mask being a file here !!!! #
 
@@ -379,50 +382,35 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     U2 = nu .+ im .* nv
     # Testing: U2 Looks okay, but might not be, it's hard to tell with im's. 
     ma, na = size(U2)
-    histo = zeros(eltype(nu), size(nu))
+    histo = zeros(ComplexF64, size(nu))
     histostd = hista = histastd = similar(nu)
 
-    method =  median_bool ? "median" : "mean"
-    println("Local $method filter running: ")
+    iter = ProgressBar(m - 1:na - m + 2)
+    for p in iter  # Looks gnar, but just a bar!
+        for ii in m - 1:1:na - m + 2
+            for jj in m - 1:1:ma - m + 2
 
-    printed = false
+                if INx[jj, ii] != 1
+                    m_floor_two = floor(Int, m / 2)
+                    tmp = U2[round(Int, jj - m_floor_two): round(Int, jj + m_floor_two),
+                            round(Int, ii - m_floor_two): round(Int, ii + m_floor_two)] 
+                    tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
 
-    for ii in m - 1:1:na - m + 2
-        for jj in m - 1:1:ma - m + 2
-
-            if INx[jj, ii] != 1
-                m_floor_two = floor(Int, m / 2)
-                tmp = U2[round(Int, jj - m_floor_two): round(Int, jj + m_floor_two),
-                        round(Int, ii - m_floor_two): round(Int, ii + m_floor_two)] 
-                tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
-
-                # Create a collection of all elements without NaN values
-                usum_prep = collect(Skipper.skip(x -> isnan(x), tmp[:]))
-                
-                # Run the appropriate stat depending on method arg.
-                usum = median_bool ? im_median(usum_prep) : mean(usum_prep)
-                
-                histostd[jj, ii] = std(usum_prep)
-
-            else
-                usum = tmp = histostd[jj, ii] = NaN
+                    # Create a collection of all elements without NaN values
+                    usum_prep = collect(Skipper.skip(x -> isnan(x), tmp[:]))
+                    
+                    # !!!!!!!! NEEDS TESTING STILL !!!!!!!! #
+                    # Run the appropriate stat depending on method arg.
+                    usum = median_bool ? im_median(usum_prep) : mean(usum_prep)
+                    histostd[jj, ii] = std(usum_prep)
+                else
+                    usum = tmp = histostd[jj, ii] = NaN
+                end
+                histo[jj, ii] = usum
             end
-                
-                
-                
-            # if !printed
-            #     println(histostd[jj, ii])
-            #     display(tmp[:])
-            #     # println(usum)
-            #     # println(size(tmp))
-            #     printed = true
-            # end
-
-
-
-        end
-        # println(".")
-    end 
+        end 
+        set_description(iter, "Local $method filter running: ")
+    end
 
 
 
