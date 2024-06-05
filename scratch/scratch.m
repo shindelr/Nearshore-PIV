@@ -178,7 +178,6 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
   prev = isnan(nu); 
   previndx = find(prev==1); 
   U2 = nu + i * nv;
-  % writematrix(U2, "../tests/mlabOut/mtestU2.csv");  
 
   teller = 1; 
   [ma, na] = size(U2); 
@@ -190,7 +189,7 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
 
   fprintf([' Local ',stat,' filter running: \n'])
 
-  printed = 0;
+  % printed = 0;
 
   for ii=m-1:1:na-m+2  
       for jj=m-1:1:ma-m+2
@@ -205,14 +204,14 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
                 usum=mnanmean(tmp(:));
               end
               histostd(jj,ii)=mnanstd(tmp(:));
-              if printed <= 10
-                disp(["====================="])
-                disp(["Here on ", ii, jj]);
-                disp(["usum: ", usum]);
-                disp(["histostd[j, i]: ", histostd(jj, ii)]);
-                disp(["====================="])
-                printed = printed + 1;
-              end
+              % if printed <= 10
+              %   disp(["====================="])
+              %   disp(["Here on ", ii, jj]);
+              %   disp(["usum: ", usum]);
+              %   disp(["histostd[j, i]: ", histostd(jj, ii)]);
+              %   disp(["====================="])
+              %   printed = printed + 1;
+              % end
           else
               usum=nan; tmp=NaN; histostd(jj,ii)=nan;
           end
@@ -236,12 +235,18 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
 
   %%%%%%%% Locate gridpoints with a higher value than the threshold 
 
-  %[cy,cx]=find((real(histo)>threshold*real(histostd) | ...
-  %    imag(histo)>threshold*imag(histostd)));
-  % [cy,cx]=find( ( real(U2)>real(histo)+threshold*real(histostd) |...
-  %     imag(U2)>imag(histo)+threshold*imag(histostd) |...
-  %     real(U2)<real(histo)-threshold*real(histostd) |...
-  %     imag(U2)<imag(histo)-threshold*imag(histostd) ) );
+  %%[cy,cx]=find((real(histo)>threshold*real(histostd) | ...
+  %%    imag(histo)>threshold*imag(histostd)));
+
+  % writematrix(histostd, "../tests/mlabOut/mtestHISTOSTD.csv");
+  
+  [cy,cx]=find(real(U2) > real(histo) + threshold * real(histostd) |...
+      imag(U2) > imag(histo) + threshold * imag(histostd) |...
+      real(U2) < real(histo) - threshold * real(histostd) |...
+      imag(U2) < imag(histo) - threshold * imag(histostd));
+    
+  disp([cy, cx]);
+  disp("stop printing cy cx");
 
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

@@ -359,7 +359,8 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     nu_dim1 = round(Int, size(u, 1) + 2 * floor(m/2))
     nu_dim2 = round(Int, size(u, 2) + 2 * floor(m/2))
     nu = zeros(eltype(u), (nu_dim1, nu_dim2)) * NaN
-    nv = similar(nu) * NaN
+    nv = zeros(eltype(u), (nu_dim1, nu_dim2)) * NaN
+    # nv = similar(nu) * NaN
     
     # Transfer over data
     from_cols = round(Int, floor(m/2) + 1)
@@ -382,10 +383,12 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     U2 = nu .+ im .* nv
     # Testing: U2 Looks okay, but might not be, it's hard to tell with im's. 
     ma, na = size(U2)
-    histostd = histo = zeros(ComplexF64, size(nu))
-    hista = histastd = similar(nu)
+    histostd = zeros(ComplexF64, size(nu)) 
+    histo = zeros(ComplexF64, size(nu))
+    hista = zeros(eltype(nu), size(nu)) 
+    histastd = zeros(eltype(nu), size(nu)) 
 
-    printed = 0
+    # printed = 0
     iter = ProgressBar(m - 1:na - m + 2)
     for p in iter  # Looks gnar, but just a bar!
         for ii in m - 1:1:na - m + 2
@@ -405,14 +408,14 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
                     usum = median_bool ? im_median(usum_prep) : mean(usum_prep)
                     histostd[jj, ii] = im_std(usum_prep)
 
-                    if printed <= 10
-                        println("=======================")
-                        println("Here on ", ii, " ", jj)
-                        println("usum: ", usum)
-                        println("histostd[j, i]: ", histostd[jj, ii])
-                        println("=======================")
-                        printed += 1
-                    end
+                    # if printed <= 10
+                    #     println("=======================")
+                    #     println("Here on ", ii, " ", jj)
+                    #     println("usum: ", usum)
+                    #     println("histostd[j, i]: ", histostd[jj, ii])
+                    #     println("=======================")
+                    #     printed += 1
+                    # end
 
                 else
                     usum = tmp = histostd[jj, ii] = NaN
@@ -423,7 +426,17 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
         set_description(iter, "Local $method filter running: ")
     end
 
+    # Locate gridpoints w/higher value than the threshold
+    # TESTING: Success!
+    # writedlm("tests/juliaOut/JtestHISTOSTD.csv", histostd, ',')
 
+    cy, cx = findall(
+        (real.(U2) .> real.(histo) .+ threshold .* real.(histostd)) .|
+        (imag.(U2) .> imag.(histo) .+ threshold .* imag.(histostd)) .|
+        (real.(U2) .< real.(histo) .- threshold .* real.(histostd)) .|
+        (imag.(U2) .< imag.(histo) .- threshold .* imag.(histostd)) 
+        )
+    display(cy, " ", cx)
 
     # Dummy values
     hu = 0; hv = 0
