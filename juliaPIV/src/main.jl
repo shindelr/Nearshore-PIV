@@ -3,6 +3,7 @@ using Statistics      # Stats obv.
 using Images          # Basic image processing library
 using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
+using Skipper         # Special skipping library to skip NaNs
 
 # PASS FUNCTIONS
 """
@@ -227,7 +228,7 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
     return xx, yy, datax, datay
 end
 
-# UTILITIES
+# FOURIER
 """
 ### pad_for_xcorr
     Determine the dimensions of a padded matrix to be used for xcorrf2. Depends
@@ -315,6 +316,7 @@ function xcorrf2(A, B, plan, pad=true)
     return c
 end
 
+# FILTERING
 """
 ### localfilt
     Filter out vectors that deviate from the median or the mean of their \
@@ -326,10 +328,11 @@ end
     - threshold : `Int`
         Specifies the point at which a vector has deviated too 
         far from the specified statistical mean or median.
-    - median, mean : `Bool`
+    - median_bool: `Bool`
         If true, specifies that the median should be the turning
-        point for the data to be filtered out on. Median defaults
-        to true, while mean defaults to false. Only specify one
+        point for the data to be filtered out on. Defaults
+        to true. If specified as false, the mean value will be 
+        used instead.
         method.
     - m : `Int`
         Defines the number of vectors contributing to the median 
@@ -345,7 +348,7 @@ end
             Successfully filtered matrices. New versions of u
             and v.
 """
-function localfilt(x, y, u, v, threshold, median=true, mean=false, m=3, mask=[])
+function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     
     IN = zeros(eltype(u), size(u))
     # !!!! Should handle mask being a file here !!!! #
@@ -368,23 +371,82 @@ function localfilt(x, y, u, v, threshold, median=true, mean=false, m=3, mask=[])
     INx[from_cols: end - minus_rows, from_cols: end - minus_rows] = IN
     # Testing: Success!
     
-    # Could be a little problem area here. Not sure these vars are used.
+    # Could be a little problem area here. Not sure any of these vars are used.
     prev = isnan.(nu)
     previndex = findall(prev)
-    
+    teller = true
+
     U2 = nu .+ im .* nv
-    # Testing: Looks okay, but might not be. 
+    # Testing: U2 Looks okay, but might not be, it's hard to tell with im's. 
     ma, na = size(U2)
     histo = zeros(eltype(nu), size(nu))
     histostd = hista = histastd = similar(nu)
 
-    println("Local median filter running: ") ? median : println("Local mean filter running: ")
+    method =  median_bool ? "median" : "mean"
+    println("Local $method filter running: ")
+
+    printed = false
+
+    for ii in m - 1:1:na - m + 2
+        for jj in m - 1:1:ma - m + 2
+
+            if INx[jj, ii] != 1
+                m_floor_two = floor(Int, m / 2)
+                tmp = U2[round(Int, jj - m_floor_two): round(Int, jj + m_floor_two),
+                        round(Int, ii - m_floor_two): round(Int, ii + m_floor_two)] 
+                tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
+
+                # Create a collection of all elements without NaN values
+                usum_prep = collect(Skipper.skip(x -> isnan(x), tmp[:]))
+                
+                # Run the appropriate stat depending on method arg.
+                usum = median_bool ? im_median(usum_prep) : mean(usum_prep)
+                
+                histostd[jj, ii] = std(usum_prep)
+
+            else
+                usum = tmp = histostd[jj, ii] = NaN
+            end
+                
+                
+                
+            # if !printed
+            #     println(histostd[jj, ii])
+            #     display(tmp[:])
+            #     # println(usum)
+            #     # println(size(tmp))
+            #     printed = true
+            # end
+
+
+
+        end
+        # println(".")
+    end 
+
+
 
     # Dummy values
     hu = 0; hv = 0
     return hu, hv
 end
 
+# STATS
+"""
+### im_median
+    Find the median of the argued collection of complex numbers.
+    If the collection is empty, returns NaN.
+"""
+function im_median(collection)
+    if length(collection) < 1
+        return NaN
+    end
+    real_part = median(real.(collection))
+    im_part = median(imag.(collection))
+    return real_part + im_part * im
+end
+
+# MAIN
 """
 ### Main Entry
     Minimal PIV calculation for testing and development.\n

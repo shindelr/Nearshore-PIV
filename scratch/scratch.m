@@ -188,24 +188,33 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
   hista = zeros(size(nu));
   histastd = zeros(size(nu));
 
-  fprintf([' Local ',stat,' filter running: '])
+  fprintf([' Local ',stat,' filter running: \n'])
 
-  % for ii=m-1:1:na-m+2  
-  %     for jj=m-1:1:ma-m+2
-  %         if INx(jj,ii)~=1
+  printed = 0;
+
+  for ii=m-1:1:na-m+2  
+      for jj=m-1:1:ma-m+2
+          if INx(jj,ii)~=1
               
-  %             tmp=U2(jj-floor(m/2):jj+floor(m/2),ii-floor(m/2):ii+floor(m/2)); 
-  %             tmp(ceil(m/2),ceil(m/2))=NaN;
-  % Check your method booleans here in Julia.
-  %             if ff==1
-  %                 usum=mnanmedian(tmp(:));
-  %             elseif ff==2
-  %                 usum=mnanmean(tmp(:));
-  %             end
-  %             histostd(jj,ii)=mnanstd(tmp(:));
-  %         else
-  %             usum=nan; tmp=NaN; histostd(jj,ii)=nan;
-  %         end
+              tmp=U2(jj-floor(m/2):jj+floor(m/2), ii-floor(m/2):ii+floor(m/2)); 
+              tmp(ceil(m/2),ceil(m/2))=NaN;
+
+              
+              if ff==1
+                usum=mnanmedian(tmp(:));
+              elseif ff==2
+                usum=mnanmean(tmp(:));
+              end
+              histostd(jj,ii)=mnanstd(tmp(:));
+              if printed == 0
+                disp(tmp(:));
+                disp(histostd(jj, ii));
+                printed = printed + 1;
+                % disp(size(tmp));
+              end
+          else
+              usum=nan; tmp=NaN; histostd(jj,ii)=nan;
+          end
   % %         u1=real(usum).^2 - real(U2(jj,ii)).^2;
   % %         v1=imag(usum).^2 - imag(U2(jj,ii)).^2;
   % %         
@@ -219,10 +228,10 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
   %         %hista(jj,ii)=(th1-th2);
   %         %if hista(jj,ii)<0, hista(jj,ii)=2*pi+hista(jj,ii); end 
   %         %histastd(jj,ii)=mnanstd(abs(angle(tmp(:))));
-  %     end
-  %     fprintf('.')
+      end
+      fprintf('.')
       
-  % end
+  end
 
   % %%%%%%%% Locate gridpoints with a higher value than the threshold 
 
