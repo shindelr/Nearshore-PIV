@@ -5,6 +5,7 @@ using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
 using Skipper         # Special skipping library to skip NaNs and other things
 using ProgressBars    
+using LinearAlgebra
 
 # PASS FUNCTIONS 
 """
@@ -52,8 +53,14 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             # writedlm("juliaPIV/tests/testY.csv", y, ',')
             # writedlm("tests/juliaOut/testDATAX.csv", datax, ',')
             # writedlm("tests/juliaOut/testDATAY.csv", datay, ',')
-
+            
             datax, datay = localfilt(x, y, datax, datay, sensit)
+            # TESTING: 13 differences, same as detected prior.
+            # writedlm("tests/juliaOut/jtest_FILTDATAX.csv", datax, ',')
+            # writedlm("tests/juliaOut/jtest_FILTDATAY.csv", datay, ',')
+
+            
+
         # end
     # end
 
@@ -95,7 +102,7 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
     # are all run at that optimized speed, supposedly making up for the loss.
     if pad
         pad_matrix = pad_for_xcorr( A[1:M, 1:N])
-        P = plan_fft(pad_matrix; flags=FFTW.PATIENT)
+        P = plan_fft(pad_matrix; flags=FFTW.MEASURE)
     else
         P = plan_fft(A[1:M, 1:N])
     end
@@ -108,8 +115,6 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
     datax = zeros(eltype(A), (xx_dim1, xx_dim2))
     datay = zeros(eltype(A), (xx_dim1, xx_dim2))
     IN = zeros(Int64, size(A))
-
-    printed = false
 
     cj = 1
     for jj in 1:((1-overlap) * N):(sy - N + 1)
@@ -360,7 +365,6 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     nu_dim2 = round(Int, size(u, 2) + 2 * floor(m/2))
     nu = zeros(eltype(u), (nu_dim1, nu_dim2)) * NaN
     nv = zeros(eltype(u), (nu_dim1, nu_dim2)) * NaN
-    # nv = similar(nu) * NaN
     
     # Transfer over data
     from_cols = round(Int, floor(m/2) + 1)
@@ -388,7 +392,6 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     hista = zeros(eltype(nu), size(nu)) 
     histastd = zeros(eltype(nu), size(nu)) 
 
-    # printed = 0
     iter = ProgressBar(m - 1:na - m + 2)
     for p in iter  # Looks gnar, but just a bar!
         for ii in m - 1:1:na - m + 2
@@ -408,15 +411,6 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
                     usum = median_bool ? im_median(usum_prep) : mean(usum_prep)
                     histostd[jj, ii] = im_std(usum_prep)
 
-                    # if printed <= 10
-                    #     println("=======================")
-                    #     println("Here on ", ii, " ", jj)
-                    #     println("usum: ", usum)
-                    #     println("histostd[j, i]: ", histostd[jj, ii])
-                    #     println("=======================")
-                    #     printed += 1
-                    # end
-
                 else
                     usum = tmp = histostd[jj, ii] = NaN
                 end
@@ -426,20 +420,36 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
         set_description(iter, "Local $method filter running: ")
     end
 
-    # Locate gridpoints w/higher value than the threshold
     # TESTING: Success!
     # writedlm("tests/juliaOut/JtestHISTOSTD.csv", histostd, ',')
+    
+    # Locate gridpoints w/higher value than the threshold
+    coords = findall(
+        (real(U2) .> real(histo) .+ threshold .* real(histostd)) .|
+        (imag(U2) .> imag(histo) .+ threshold .* imag(histostd)) .|
+        (real(U2) .< real(histo) .- threshold .* real(histostd)) .|
+        (imag(U2) .< imag(histo) .- threshold .* imag(histostd)))
+    
+    # Then "filter" those points out by changing them to NaN!
+    for jj in eachindex(coords)
+        nu[coords[jj]] = NaN
+        nv[coords[jj]] = NaN
+    end
 
-    cy, cx = findall(
-        (real.(U2) .> real.(histo) .+ threshold .* real.(histostd)) .|
-        (imag.(U2) .> imag.(histo) .+ threshold .* imag.(histostd)) .|
-        (real.(U2) .< real.(histo) .- threshold .* real.(histostd)) .|
-        (imag.(U2) .< imag.(histo) .- threshold .* imag.(histostd)) 
-        )
-    display(cy, " ", cx)
+    # TESTING: Showing 13 differences, nu & nv are directly related to datax
+    #  and datay. So maybe this problem stems from firstpass()
 
-    # Dummy values
-    hu = 0; hv = 0
+    # writedlm("tests/juliaOut/JtestNUFilt.csv", nu, ',')
+    # writedlm("tests/juliaOut/JtestNVFilt.csv", nv, ',')
+
+    # Skipped print statement about how many vectors were filtered.
+    # Skpped checking for 'interp' arg, because the actual program wasn't using
+    # we're calling naninterp explicitly right after this function.
+
+    m_ceil_two = ceil(Int, m/2)
+    m_floor_two = floor(Int, m/2)
+    hu = nu[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
+    hv = nv[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
     return hu, hv
 end
 

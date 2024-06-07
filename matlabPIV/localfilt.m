@@ -143,6 +143,7 @@ fprintf([num2str(rest),' vectors changed'])
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Now we check for NaN's and interpolate where they exist
 if any(strcmp(varargin,'interp'))
+    disp("made it");
     if any(isnan(u(:)))
         [nu,nv]=naninterp(nu,nv);
     end

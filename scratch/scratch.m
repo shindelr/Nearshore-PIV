@@ -238,44 +238,40 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
   %%[cy,cx]=find((real(histo)>threshold*real(histostd) | ...
   %%    imag(histo)>threshold*imag(histostd)));
 
-  % writematrix(histostd, "../tests/mlabOut/mtestHISTOSTD.csv");
   
   [cy,cx]=find(real(U2) > real(histo) + threshold * real(histostd) |...
       imag(U2) > imag(histo) + threshold * imag(histostd) |...
       real(U2) < real(histo) - threshold * real(histostd) |...
       imag(U2) < imag(histo) - threshold * imag(histostd));
-    
-  disp([cy, cx]);
-  disp("stop printing cy cx");
-
+  
   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-  % for jj=1:length(cy)
-  %     %uv2(jj)=u(cy(jj),cx(jj)); vv2(jj)=v(cy(jj),cx(jj));
-  %     %xv2(jj)=x(cy(jj),cx(jj)); yv2(jj)=y(cy(jj),cx(jj));
-  %     % Now we asign NotANumber (NaN) to all the points in the matrix that
-  %     % exceeds our threshold.
-  %     nu(cy(jj),cx(jj))=NaN;  nv(cy(jj),cx(jj))=NaN;
-  % end
+  for jj=1:length(cy)
+      % uv2(jj)=u(cy(jj),cx(jj)); vv2(jj)=v(cy(jj),cx(jj));
+      % xv2(jj)=x(cy(jj),cx(jj)); yv2(jj)=y(cy(jj),cx(jj));
+      % Now we asign NotANumber (NaN) to all the points in the matrix that
+      % exceeds our threshold.
+      nu(cy(jj),cx(jj))=NaN;  nv(cy(jj),cx(jj))=NaN;
+  end
+  % writematrix(nu, "../tests/mlabOut/mtestNUFILT.csv");
+  % writematrix(nv, "../tests/mlabOut/mtestNVFILT.csv");
 
-  % rest=length(cy);
 
-  % rest2=sum(isnan(u(:)))-sum(prev(:));
-  % fprintf([num2str(rest),' vectors changed'])
-  % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  % % Now we check for NaN's and interpolate where they exist
-  % if any(strcmp(varargin,'interp'))
-  %     if any(isnan(u(:)))
-  %         [nu,nv]=naninterp(nu,nv);
-  %     end
-  % end
-  % hu=nu(ceil(m/2):end-floor(m/2),ceil(m/2):end-floor(m/2));
-  % hv=nv(ceil(m/2):end-floor(m/2),ceil(m/2):end-floor(m/2));
-  % fprintf('.\n')
+  rest=length(cy);
 
-  % Dummies
-  hu = 0;
-  hv = 0;
+  rest2=sum(isnan(u(:)))-sum(prev(:));
+  fprintf([num2str(rest),' vectors changed'])
+  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  % Now we check for NaN's and interpolate where they exist
+  if any(strcmp(varargin,'interp'))
+      disp("Made it");
+      if any(isnan(u(:)))
+          [nu,nv]=naninterp(nu,nv);
+      end
+  end
+  hu=nu(ceil(m/2):end-floor(m/2),ceil(m/2):end-floor(m/2));
+  hv=nv(ceil(m/2):end-floor(m/2),ceil(m/2):end-floor(m/2));
+  fprintf('.\n')
 end
 
 % ------ TEST ZONE ------
@@ -309,6 +305,8 @@ sensit = 3;
 
   % validation
   [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
+  writematrix(datax, "../tests/mlabOut/mtestFILTDATAX.csv");
+  writematrix(datay, "../tests/mlabOut/mtestFILTDATAY.csv");
   toc
   % [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
   % datax=floor(datax);
