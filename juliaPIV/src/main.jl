@@ -1,16 +1,15 @@
 # Third party modules
 # Allows developers to 
-using Revise          # Edit modules without restarting the whole IDE/REPL
+using Statistics
 using FFTW            # Fast Fourier Transforms library built on C
 using Images          # Basic image processing library
 using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
-using Skipper         # Special skipping library to skip NaNs and other things
-using ProgressBars    
+using ProgressBars
 
 # User defined modules
 include("./filtering.jl")
-using .PIVFilters: localfilt, linear_naninterp
+using .PIVFilters: localfilt #linear_naninterp
 
 # PASS FUNCTIONS 
 """
@@ -330,6 +329,85 @@ function xcorrf2(A, B, plan, pad=true)
     return c
 end
 
+# FILTERS
+"""
+### linear_naninterp
+    Interpolates NaN's in a vectorfield. Sorts all spurious 
+    vectors based on the number of spurious neighbors to a 
+    point. The function replaces NaN values in the input 
+    vector fields U and V using linear interpolation.\n
+    Interpolation starts with the ones that have the least 
+    number of outliers in their neighborhood and loops until no 
+    NaN's are present in the field.\n
+    NOTE: This function is a completely gutted version of the
+    original naninterp combined with naninterp2. The majority
+    of naninterp was varargin code figuring out which method
+    to execute naninterp2 with. Since arguments to naninterp
+    were hardcoded in, the desired form of naninterp was just
+    turned into a specific function. If necessary, other 
+    methods can be written to emulate the functionality of
+    the original functions. Moreover, though a mask was being
+    passed in, the masking branch was not being executed in
+    either functions. Therefore, in this implementation, masking
+    was left out.\n
+
+    Parameters:
+    -----------
+    - u, v: `Matrices`\n
+
+    Original author:
+    ----------------
+    J. Kristian Sveen (jks@math.uio.no)
+    Department of Mathematics, Mechanics Division, University of Oslo, Norway
+    Copyright 1999 - 2001
+    For use with MatPIV 1.6, Copyright
+    Distributed under the terms of the GNU - GPL license
+"""
+function linear_naninterp(u, v)
+    coords = findall(x->isnan(x), u)
+    numm = length(coords)
+    dy,dx = size(u)
+    lp = 1; tel = 1
+
+    # Now sort the NaN's after how many neighbors they have that are
+    # physical values. Then we first interpolate those that have 8
+    # neighbors, followed by 7, 6, 5, 4, 3, 2 and 1
+
+    # while !isempty(coords)
+
+        # Check number of neighbors
+        for i in eachindex(coords)
+            py = coords[i][1]; px = coords[i][2]
+
+            # Correct if vector is on edge of matrix
+            corx1 = corx2 = cory1 = cory2 = 0
+            if py == 1
+                cory1 = 1; cory2 = 0
+            elseif py == dy 
+                cory1 = 0; cory2 = -1
+            end
+            if px == 1
+                corx1 = 1; corx2 = 0
+            elseif px == dx
+                corx1 = 1; corx2 = -1
+                # println("Here on: ", coords[i])
+            end
+            
+            ma = u[
+                round(Int, py - 1 + cory1): round(Int, py + 1 + cory2),
+                round(Int, px - 1 + corx1): round(Int, px + 1 + corx2)
+            ]
+            # writedlm("tests/juliaOut/jtest_MA.csv", ma, ',')
+
+            # LEFT OFF HERE
+
+        end
+
+    # end
+
+    # Dummies
+    return 0, 0
+end
 
 # MAIN
 """
