@@ -55,14 +55,18 @@ if nargin > 5
     
     if nargin==8, 
         maske=varargin{end}; 
-        if ischar(maske) & ~isempty(maske), maske=load(maske); maske=maske.maske; end
+        if ischar(maske) & ~isempty(maske)
+            maske=load(maske);
+            maske=maske.maske;
+        end
         if ~isempty(maske)
             for ii=1:length(maske) 
                 IN2=inpolygon(x,y,maske(ii).idxw,maske(ii).idyw);
                 IN=[IN+IN2];
             end
-        else IN=zeros(size(u)); 
-        end, 
+        else
+            IN=zeros(size(u)); 
+        end 
     end
     
 end

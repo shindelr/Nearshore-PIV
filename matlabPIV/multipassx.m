@@ -24,7 +24,7 @@ for i=1:iter-1
 
   % validation.  TODO, simplify these codes!
   % [datax,datay]=globfilt(x,y,datax,datay,3);
-[datax,datay]=localfilt(x,y,datax,datay,sensit,'median',3,[]);
+  [datax,datay]=localfilt(x,y,datax,datay,sensit,'median',3,[]);
   [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
   datax=floor(datax);
   datay=floor(datay);

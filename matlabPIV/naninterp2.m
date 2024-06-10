@@ -27,6 +27,7 @@ else
 end 
 if nargin==2
     [py,px]=find(isnan(u)==1);  
+    % disp("Made it, naninterp2:30");
 else
     py2=[];px2=[]; ipol2=zeros(size(xx));
     for i=1:size(mask,2)
