@@ -385,7 +385,7 @@ function [u,v]=naninterp2(u,v,mask,xx,yy)
       end
       [py,px]=find(isnan(u)==1 & ~ipol2 );     
   end
-  
+  % counter = 0;
   numm=size(py);
   [dy,dx]=size(u);
   lp=1;
@@ -395,7 +395,7 @@ function [u,v]=naninterp2(u,v,mask,xx,yy)
   % neighbors, followed by 7, 6, 5, 4, 3, 2 and 1
   % use SORTROWS to sort the numbers
   
-  % while ~isempty(py)
+  while ~isempty(py)
   
     % check number of neighbors
       for i=1:length(py)
@@ -412,67 +412,78 @@ function [u,v]=naninterp2(u,v,mask,xx,yy)
             corx1=1;
             corx2=0;
           elseif px(i)==dx 
-            % disp(["Here on ", py(i), px(i)])
             corx1=0;
             corx2=-1;
           end
 
           ma = u( py(i)-1+cory1:py(i)+1+cory2, ...
                   px(i)-1+corx1:px(i)+1+corx2 );
-          
-          % writematrix(ma, "../tests/mlabOut/mtestMA.csv");
 
           nei(i,1)=sum(~isnan(ma(:)));
           nei(i,2)=px(i);
           nei(i,3)=py(i);
+          % writematrix(nei, "../tests/mlabOut/mtest_NEI.csv");
       end
-  %     % now sort the rows of NEI to interpolate the vectors with the
-  %     % fewest spurious neighbors.
-  %     nei=flipud(sortrows(nei,1));
-  %     % reconstruct the sorted outlier-vectors.
-  %     % and only interpolate the first 50% of vectors
-  %     ind=find(nei(:,1)>=8);
-  %     while isempty(ind)
-  %         ind=find(nei(:,1)>=8-tel);
-  %         tel=tel+1;
-  %     end
-  %     tel=1;
-  %     py=nei(ind,3);
-  %     px=nei(ind,2);
-  %     for j=1:size(py,1)
-  %         corx1=0; corx2=0; cory1=0; cory2=0;
-  %         if py(j)==1
-  %             cory1=1; cory2=0;
-  %         elseif py(j)==dy
-  %             cory1=0; cory2=-1;
-  %         end
-  %         if px(j)==1
-  %             corx1=1; corx2=0;
-  %         elseif px(j)==dx
-  %             corx1=0; corx2=-1;
-  %         end
-  %         tmpu=u(py(j)-1+cory1:py(j)+1+cory2, px(j)-1+corx1:px(j)+1+corx2);
-  %         tmpv=v(py(j)-1+cory1:py(j)+1+cory2, px(j)-1+corx1:px(j)+1+corx2);
-  %         u(py(j),px(j))=mnanmean(tmpu(:));
-  %         v(py(j),px(j))=mnanmean(tmpv(:));
-  %         if lp>numm(1), u(py(j),px(j))=0;v(py(j),px(j))=0;end
-  %     end 
-  %     tt=length(py);
-      
-  %     if nargin==2
-  %         [py,px]=find(isnan(u)==1);  
-  %     else
-  %         %in2=zeros(size(xx));
-  %         %for i=1:length(mask)
-  %         %    in=inpolygon(xx,yy,mask(i).idxw,mask(i).idyw);
-  %         %    in2=in2+double(in);
-  %         %end
-  %         [py,px]=find(isnan(u)==1 & ~ipol2 );
-  %     end
-      
-  %     lp=lp+1;
+      % writematrix(nei, "../tests/mlabOut/mtest_presortNEI.csv");
 
-  % end
+      % now sort the rows of NEI to interpolate the vectors with the
+      % fewest spurious neighbors.
+      nei=flipud(sortrows(nei,1));
+      % writematrix(nei, "../tests/mlabOut/mtest_postsortNEI.csv");
+
+      % reconstruct the sorted outlier-vectors.
+      % and only interpolate the first 50% of vectors
+      ind=find(nei(:,1)>=8);
+      while isempty(ind)
+          ind=find(nei(:,1) >= 8 - tel);
+          tel=tel+1;
+      end
+      tel=1;
+      py=nei(ind,3);
+      px=nei(ind,2);
+
+      for j=1:size(py,1)
+          corx1=0; corx2=0; cory1=0; cory2=0;
+          if py(j)==1
+              cory1=1; cory2=0;
+          elseif py(j)==dy
+              cory1=0; cory2=-1;
+          end
+          if px(j)==1
+              corx1=1; corx2=0;
+          elseif px(j)==dx
+              corx1=0; corx2=-1;
+          end
+          tmpu=u(py(j)-1+cory1:py(j)+1+cory2, px(j)-1+corx1:px(j)+1+corx2);
+          tmpv=v(py(j)-1+cory1:py(j)+1+cory2, px(j)-1+corx1:px(j)+1+corx2);
+
+          u(py(j),px(j))=mnanmean(tmpu(:));
+          v(py(j),px(j))=mnanmean(tmpv(:));
+
+          if lp>numm(1)
+             u(py(j),px(j))=0;
+             v(py(j),px(j))=0;
+          end
+      end 
+
+      tt=length(py);
+      
+      if nargin==2
+          [py,px]=find(isnan(u)==1);  
+      else
+          %in2=zeros(size(xx));
+          %for i=1:length(mask)
+          %    in=inpolygon(xx,yy,mask(i).idxw,mask(i).idyw);
+          %    in2=in2+double(in);
+          %end
+          [py,px]=find(isnan(u)==1 & ~ipol2 );
+      end
+      % counter = counter + 1;
+      % disp(counter);
+      % disp(py)
+      lp=lp+1;
+
+  end
 end
 % -----------------------------------------------
 % -----------------------------------------------
@@ -504,46 +515,52 @@ sensit = 3;
 % Loop disabled for testing
 % for i=1:iter-1
     % disp(['iter ' num2str(i) ' of ' num2str(iter)]);
-  [x,y,datax,datay] = firstpass(A, B, wins(1, :), overlap, datax, datay);
+  i = 1;
+  [x,y,datax,datay] = firstpass(A, B, wins(i, :), overlap, datax, datay);
 
   % validation
   [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
-  % writematrix(datax, "../tests/mlabOut/mtestFILTDATAX.csv");
-  % writematrix(datay, "../tests/mlabOut/mtestFILTDATAY.csv");
 
   [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
-  % disp(datax);
-  % datax=floor(datax);
-  % datay=floor(datay);
+  datax=floor(datax);
+  datay=floor(datay);
+  % writematrix(datay, "../tests/mlabOut/mtestINTERP_DATAY.csv");
 
   % % expand the velocity data to twice the original size
-  % if(i~=iter-1)
-  %   if wins(i,1)~=wins(i+1,1)
-  %     X=(1:((1-overlap)*2*wins(i+1,1)):sx-2*wins(i+1,1)+1) + wins(i+1,1);
-  %     XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
-  %   else
-  %     XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
-  %     X=XI;
-  %   end
-  %   if wins(i,2)~=wins(i+1,2)
-  %     Y=(1:((1-overlap)*2*wins(i+1,2)):sy-2*wins(i+1,2)+1) + wins(i+1,2);
-  %     YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
-  %   else
-  %     YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
-  %     Y=YI; 
-  %   end
-  %   datax=round(interp2(X,Y',datax,XI,YI'));
-  %   datay=round(interp2(X,Y',datay,XI,YI'));
-  %   [datax,datay]=naninterp(datax,datay,'linear',[],...
-  %                           repmat(XI,size(datax,1),1),...
-  %                           repmat(YI',1,size(datax,2)));  % TODO simplify!
-  %   datax=round(datax);
-  %   datay=round(datay);
+  if(i~=iter-1)
+    if wins(i,1)~=wins(i+1,1)
+      X=(1:((1-overlap)*2*wins(i+1,1)):sx-2*wins(i+1,1)+1) + wins(i+1,1);
+      XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+    else
+      XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+      X=XI;
+    end
+    if wins(i,2)~=wins(i+1,2)
+      Y=(1:((1-overlap)*2*wins(i+1,2)):sy-2*wins(i+1,2)+1) + wins(i+1,2);
+      YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+    else
+      YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+      Y=YI; 
+    end
+    disp(datax);
+
+    datax=round(interp2(X,Y',datax,XI,YI'));
+    writematrix(datax, "../tests/mlabOut/mtesINTERP2_DATAX.csv");
+    
+    % datay=round(interp2(X,Y',datay,XI,YI'));
+    % [datax,datay]=naninterp(datax,datay,'linear',[],...
+    %                         repmat(XI,size(datax,1),1),...
+    %                         repmat(YI',1,size(datax,2)));  % TODO simplify!
+    % datax=round(datax);
+    % datay=round(datay);
+  end
   % end
-  % end
-  % writematrix(x, 'mtestX.csv');
-  % writematrix(y, 'mtestY.csv');
-  % writematrix(datax, "../tests/mlabOut/mtestDATAX.csv");
-  % writematrix(datay, "../tests/mlabOut/mtestDATAY.csv");
+
+% % Final pass gives displacement to subpixel accuracy
+% disp('Final iteration')
+
+% % Call plan_fft
+
+% [x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
 
 % ------ TEST ZONE ------

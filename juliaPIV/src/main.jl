@@ -6,6 +6,8 @@ using Images          # Basic image processing library
 using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
 using ProgressBars
+using Skipper         # Special skipping library to skip NaNs and other things
+using Interpolations
 
 # User defined modules
 include("./filtering.jl")
@@ -51,19 +53,66 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
         # for i in 1:iter-1
             # println("Iter ", i, " of ", iter )
             # PIV proper
-            # x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
-            x, y, datax, datay = firstpass(A, B, wins[1, :], overlap, datax, datay)
-            # writedlm("juliaPIV/tests/testX.csv", x, ',')
-            # writedlm("juliaPIV/tests/testY.csv", y, ',')
-            # writedlm("tests/juliaOut/testDATAX.csv", datax, ',')
-            # writedlm("tests/juliaOut/testDATAY.csv", datay, ',')
+            i = 1
+            x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
             
             datax, datay = localfilt(x, y, datax, datay, sensit)
             # TESTING: 13 differences, same as detected prior.
-            # writedlm("tests/juliaOut/jtest_FILTDATAX.csv", datax, ',')
-            # writedlm("tests/juliaOut/jtest_FILTDATAY.csv", datay, ',')
-
+            
             datax, datay = linear_naninterp(datax, datay)
+            # TESTING: 43 differences. We're going to need to debug firstpass
+            # to see why datax, datay are experiencing differences.
+            
+            datax = floor.(Int, datax)
+            datay = floor.(Int, datay)
+            """TESTING: 12-15 differences almost all in the same columns and rows
+            as one another. But after flooring the matrices to integers, the
+            43 differences above smoothed out, could've just been differences
+            in data representation. This problem must stem back to firstpass."""
+            # writedlm("tests/juliaOut/jtest_INTERPDATAY.csv", datay, ',')
+            # writedlm("tests/juliaOut/jtest_INTERPDATAX.csv", datax, ',')
+
+            # Different process for the final pass
+            if i != iter - 1
+                next_win_x = wins[i + 1, 1]
+                next_win_y = wins[i + 1, 2]
+
+                # Final window size is duplicated, so check for equality.
+                if wins[i, 1] != next_win_x
+                    # First time: X = [1:32:3009] .+ 32
+                    # X = 33, 65, ..., 3041   size = 95
+                    X = (1:((1 - overlap) * 2 * next_win_x):
+                            sx - 2 * next_win_x + 1) .+ next_win_x
+                    XI = (1:((1 - overlap) * next_win_x):
+                            sx - next_win_x + 1) .+ (next_win_x / 2)
+                    XI = XI[2:end - 1]
+                else
+                    X = (1:((1 - overlap) * next_win_x):
+                            sx - next_win_x + 1) .+ (next_win_x / 2)
+                    XI = (1:((1 - overlap) * next_win_x):
+                            sx - next_win_x + 1) .+ (next_win_x / 2)
+                end
+
+                if wins[i, 2] != next_win_y
+                    Y = (1:((1 - overlap) * 2 * next_win_y): 
+                            sy - 2 * next_win_y + 1) .+ next_win_y
+                    YI = (1:((1 - overlap) * next_win_y):
+                            sy - next_win_y + 1) .+ (next_win_y / 2)
+                    YI = YI[2:end - 1]
+                else
+                    Y = (1:((1 - overlap) * next_win_y):
+                            sy - next_win_y + 1) .+ (next_win_y / 2)
+                    YI = (1:((1 - overlap) * next_win_y):
+                            sy - next_win_y + 1) .+ (next_win_y / 2)
+                end
+
+                # new_datax = fill(NaN, size(YI,1) + 1, size(XI,1) + 1)
+                # new_datax = fill(NaN, 127, 195)
+                itp = interpolate((Y, X), datax, Gridded(Linear()))
+                datax = [itp(yi, xi) for yi in YI, xi in XI]
+
+            end
+
 
 
         # end
@@ -369,18 +418,25 @@ function linear_naninterp(u, v)
     dy,dx = size(u)
     lp = 1; tel = 1
 
+    # counter = 0
     # Now sort the NaN's after how many neighbors they have that are
     # physical values. Then we first interpolate those that have 8
     # neighbors, followed by 7, 6, 5, 4, 3, 2 and 1
 
-    # while !isempty(coords)
+    while !isempty(coords)
+        nei = zeros(Int64, length(coords), 3)
 
-        # Check number of neighbors
+        # writedlm("tests/juliaOut/Jtest_py_px.csv", 
+        #         [(coords[i][1],coords[i][2]) for i in eachindex(coords)], 
+        #         ',')
+
+        # Check neighbors
         for i in eachindex(coords)
             py = coords[i][1]; px = coords[i][2]
+            corx1 = 0; corx2 = 0; cory1 = 0; cory2 = 0
 
             # Correct if vector is on edge of matrix
-            corx1 = corx2 = cory1 = cory2 = 0
+            # These are edge cases as we explore each NaN in u.
             if py == 1
                 cory1 = 1; cory2 = 0
             elseif py == dy 
@@ -390,23 +446,73 @@ function linear_naninterp(u, v)
                 corx1 = 1; corx2 = 0
             elseif px == dx
                 corx1 = 1; corx2 = -1
-                # println("Here on: ", coords[i])
             end
             
+            # Create a matrix of NaN's 8 neighbors
             ma = u[
-                round(Int, py - 1 + cory1): round(Int, py + 1 + cory2),
-                round(Int, px - 1 + corx1): round(Int, px + 1 + corx2)
+                py - 1 + cory1: py + 1 + cory2,
+                px - 1 + corx1: px + 1 + corx2
             ]
-            # writedlm("tests/juliaOut/jtest_MA.csv", ma, ',')
 
-            # LEFT OFF HERE
-
+            nei[i, 1] = count(!isnan, ma)
+            nei[i, 2] = px
+            nei[i, 3] = py
         end
 
-    # end
+        # !!! TESTING: Strange results, looks the same by hand but off by 24
+        # rows. Seems like the nan count is off by one in some cases?
+        # writedlm("tests/juliaOut/Jtest_presort_NEI.csv", nei, ',')
+        
+        # Sort NEI by row to interpolate vectors with fewest spurious neighbors.
+        nei = sortslices(nei, dims=1, lt=Base.isgreater)
+        # writedlm("tests/juliaOut/Jtest_postsort_NEI.csv", nei, ',')
+  
+        # Reconstruct sorted outliers and interpolate 1st 50%.
+        idx = findall(x -> x >= 8, nei[:, 1])
+        while isempty(idx)
+            idx = findall(x -> x >= (8-tel), nei[:, 1])
+            tel += 1
+        end
+        tel = 1
+        py = nei[idx, 3]
+        px = nei[idx, 2]
 
-    # Dummies
-    return 0, 0
+        for j in axes(py, 1)
+            corx1=0; corx2=0; cory1=0; cory2=0
+            if py[j] == 1
+                cory1 = 1; cory2 = 0
+            elseif py[j] == dy
+                cory1 = 0; cory2 = -1
+            end
+            if px[j] == 1
+                corx1 = 1; corx2 = 0
+            elseif px[j] == dx
+                corx1 = 0; corx2 = -1
+            end
+
+            temp_u = u[py[j] - 1 + cory1:py[j] + 1 + cory2, 
+                    px[j] - 1 + corx1:px[j] + 1 + corx2] 
+            temp_v = v[py[j] - 1 + cory1:py[j] + 1 + cory2, 
+                    px[j] - 1 + corx1:px[j] + 1 + corx2] 
+            
+            mean_prep_u = collect(Skipper.skip(x -> isnan(x), temp_u[:]))
+            mean_prep_v = collect(Skipper.skip(x -> isnan(x), temp_v[:]))
+            u[py[j], px[j]] = mean(mean_prep_u)
+            v[py[j], px[j]] = mean(mean_prep_v)
+            
+            if lp > numm
+                u[py[j], px[j]] = 0
+                v[py[j], px[j]] = 0
+            end
+        end
+        tt = length(py)
+        coords = findall(x->isnan(x), u)  # Might not be necessary
+        lp += 1
+        # counter += 1
+        # println(counter)
+        # display(coords)
+    end
+    return u, v
 end
 
 # MAIN
