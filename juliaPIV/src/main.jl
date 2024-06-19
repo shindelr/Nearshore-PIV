@@ -8,6 +8,7 @@ using DelimitedFiles  # Write matrices to CSV
 using ProgressBars
 using Skipper         # Special skipping library to skip NaNs and other things
 using Interpolations
+using Plots
 
 # User defined modules
 include("./filtering.jl")
@@ -48,12 +49,13 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
 
     # Disabled loop for testing
     # Getting slight errors on datay and datax. Last test showed 5 differences.
-    
-    # for p in ProgressBars(1:iter - 1)
-        # for i in 1:iter-1
-            # println("Iter ", i, " of ", iter )
+        for i in 1:iter-1
+            println("Iter ", i, " of ", iter )
             # PIV proper
-            i = 1
+            # i = 1
+
+            # writedlm("tests/juliaOut/jtest_DATAX.csv", datax, ',')
+
             x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
             
             datax, datay = localfilt(x, y, datax, datay, sensit)
@@ -69,7 +71,6 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             as one another. But after flooring the matrices to integers, the
             43 differences above smoothed out, could've just been differences
             in data representation. This problem must stem back to firstpass."""
-            # writedlm("tests/juliaOut/jtest_INTERPDATAY.csv", datay, ',')
             # writedlm("tests/juliaOut/jtest_INTERPDATAX.csv", datax, ',')
 
             # Different process for the final pass
@@ -106,18 +107,33 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                             sy - next_win_y + 1) .+ (next_win_y / 2)
                 end
 
-                # new_datax = fill(NaN, size(YI,1) + 1, size(XI,1) + 1)
-                # new_datax = fill(NaN, 127, 195)
-                itp = interpolate((Y, X), datax, Gridded(Linear()))
-                datax = [itp(yi, xi) for yi in YI, xi in XI]
+                m = length(YI)
+                n = length(XI)
+                itp_datax = fill(NaN, m+2, n+2)
+                itp_datay = fill(NaN, m+2, n+2)
 
+                itp_x = interpolate((Y, X), datax, Gridded(Linear()))
+                datax = [itp_x(yi, xi) for yi in YI, xi in XI]
+
+                # itp_datax[2:end-1, 2:end-1] = ceil.(Int, datax)
+                itp_datax[2:end-1, 2:end-1] = round.(Int, datax)
+
+                itp_y = interpolate((Y, X), datay, Gridded(Linear()))
+                datay = [itp_y(yi, xi) for yi in YI, xi in XI]
+
+                itp_datay[2:end-1, 2:end-1] = round.(Int, datay)
+                # itp_datay[2:end-1, 2:end-1] = ceil.(Int, datay)
+                # itp_datay = ceil.(Int, datay)
+
+
+                datax, datay = linear_naninterp(itp_datax, itp_datay)
+                
+                datax = round.(Int, datax)
+                datay = round.(Int, datay)
+
+                # writedlm("tests/juliaOut/jtest_DATAY.csv", datay, ',')
             end
-
-
-
-        # end
-    # end
-
+        end
 
     # Dummy values
     x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
@@ -150,10 +166,6 @@ depending on the size of the given windows. Consider renaming*\n\n
 """
 function firstpass(A, B, N, overlap, idx, idy, pad=true)
     M = floor(Int, N[1]); N = floor(Int, N[2])
-    # Plan_fft using A, M, N here!
-    # Chose to use paitient because it finds the perfect optimiazation for the
-    # given matrix. It takes a couple of seconds at run time, but then the FFTs
-    # are all run at that optimized speed, supposedly making up for the loss.
     if pad
         pad_matrix = pad_for_xcorr( A[1:M, 1:N])
         P = plan_fft(pad_matrix; flags=FFTW.MEASURE)
@@ -177,7 +189,9 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
             # Using floor until I have more information! Could be a problem.
             IN_i_1 = floor(Int64, (jj + N/2))
             IN_i_2 = floor(Int64, (ii + M/2))
+
             if IN[IN_i_1, IN_i_2] != 1
+
                 if isnan(idx[cj, ci])
                     idx[cj, ci] = 0
                 end
@@ -201,13 +215,9 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 D = B[floor(Int, jj+idy[cj, ci]):floor(Int, jj+N-1+idy[cj, ci]), 
                       floor(Int, ii+idx[cj, ci]):floor(Int, ii+M-1+idx[cj, ci])]
                 
-                # Have to broadcast "." over each element
                 C = C.-mean(C); D = D.-mean(D)
                 stad1 = std(C); stad2 = std(D)  # Might need to vec() these
 
-                # To apply weight function, uncomment below:
-                # C = C.*W; D = D.*W
-                
                 if stad1 == 0
                     stad1 = NaN
                 end

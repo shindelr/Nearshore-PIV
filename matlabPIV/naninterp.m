@@ -71,15 +71,15 @@ elseif strcmp(met,'linear')==1 & ~strcmp(met,'weighted')==1
     if length(varargin)==4
         maske=varargin{2};
         if ischar(maske) & ~isempty(maske)
-            % disp("Made it, L:74")
+            disp("Made it, L:74")
             maske=load(maske);
             maske=maske.maske; 
         end  
         if isempty(maske)
-            % disp("Made it, L:79");
+            disp("Made it, L:79");
             [u,v]=naninterp2(u,v); usr=any(isnan(u(:)));
         else
-            % disp("Made it, L:82");
+            disp("Made it, L:82");
             xx=varargin{3}; yy=varargin{4};
             maske=rmfield(maske,'msk'); % this is done to avoid the large matrix 
             %being copied into the next function.
@@ -87,7 +87,7 @@ elseif strcmp(met,'linear')==1 & ~strcmp(met,'weighted')==1
         end
     else
         while usr~=0
-            % disp("Made it, L:90");
+            disp("Made it, L:90");
             % interpolate NaN's using NANINTERP2.M
             [u,v]=naninterp2(u,v); usr=any(isnan(u(:)));
         end
