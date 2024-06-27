@@ -8,6 +8,8 @@ using DelimitedFiles  # Write matrices to CSV
 using ProgressBars
 using Skipper         # Special skipping library to skip NaNs and other things
 using Interpolations
+# using Dierckx
+# using GridInterpolations
 using Plots
 
 # User defined modules
@@ -49,10 +51,10 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
 
     # Disabled loop for testing
     # Getting slight errors on datay and datax. Last test showed 5 differences.
-        for i in 1:iter-1
-            println("Iter ", i, " of ", iter )
+        # for i in 1:iter-1
+            # println("Iter ", i, " of ", iter )
             # PIV proper
-            # i = 1
+            i = 1
 
             # writedlm("tests/juliaOut/jtest_DATAX.csv", datax, ',')
 
@@ -107,33 +109,32 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                             sy - next_win_y + 1) .+ (next_win_y / 2)
                 end
 
+                # Creating new NaN matrices to interpolate into
                 m = length(YI)
                 n = length(XI)
                 itp_datax = fill(NaN, m+2, n+2)
                 itp_datay = fill(NaN, m+2, n+2)
 
+                # Build interpolate func, layer onto datax, copy into NaN matrix
                 itp_x = interpolate((Y, X), datax, Gridded(Linear()))
                 datax = [itp_x(yi, xi) for yi in YI, xi in XI]
-
-                # itp_datax[2:end-1, 2:end-1] = ceil.(Int, datax)
                 itp_datax[2:end-1, 2:end-1] = round.(Int, datax)
-
+ 
                 itp_y = interpolate((Y, X), datay, Gridded(Linear()))
                 datay = [itp_y(yi, xi) for yi in YI, xi in XI]
-
-                itp_datay[2:end-1, 2:end-1] = round.(Int, datay)
-                # itp_datay[2:end-1, 2:end-1] = ceil.(Int, datay)
-                # itp_datay = ceil.(Int, datay)
-
-
-                datax, datay = linear_naninterp(itp_datax, itp_datay)
+                # itp_datay[2:end-1, 2:end-1] = round.(Int, datay)
+                itp_datay[2:end-1, 2:end-1] = datay
                 
-                datax = round.(Int, datax)
-                datay = round.(Int, datay)
+                writedlm("tests/juliaOut/jtest_DATAY.csv", itp_datay, ',')
 
-                # writedlm("tests/juliaOut/jtest_DATAY.csv", datay, ',')
+                # Interpolate out the NaN's we put in
+                # datax, datay = linear_naninterp(itp_datax, itp_datay)
+                
+                # datax = round.(Int, datax)
+                # datay = round.(Int, datay)
+
             end
-        end
+        # end
 
     # Dummy values
     x=0; y=0; u=0; v=0; SnR=0; Pkh=0;

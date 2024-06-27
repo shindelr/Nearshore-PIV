@@ -548,17 +548,18 @@ sensit = 3;
       end
 
       datax=round(interp2(X,Y',datax,XI,YI'));
-      datay=round(interp2(X,Y',datay,XI,YI'));
-
-      [datax,datay]=naninterp(datax, datay, 'linear', [], ...
-                              repmat(XI, size(datax, 1), 1), ...
-                              repmat(YI', 1, size(datax, 2)) ...
-                              ); 
+      datay=interp2(X,Y',datay,XI,YI');
+      % datay=round(interp2(X,Y',datay,XI,YI'));
       
-      datax=round(datax);
-      datay=round(datay);
+      % [datax,datay]=naninterp(datax, datay, 'linear', [], ...
+      %                         repmat(XI, size(datax, 1), 1), ...
+      %                         repmat(YI', 1, size(datax, 2)) ...
+      %                         ); 
       
-      writematrix(datax, "../tests/mlabOut/mtest_DATAX.csv");
+      % datax=round(datax);
+      % datay=round(datay);
+      
+      % writematrix(datax, "../tests/mlabOut/mtest_DATAX.csv");
       writematrix(datay, "../tests/mlabOut/mtest_DATAY.csv");
     end
 % end

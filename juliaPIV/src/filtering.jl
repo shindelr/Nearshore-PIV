@@ -169,9 +169,9 @@ end
     For use with MatPIV 1.6, Copyright
     Distributed under the terms of the GNU - GPL license
 """
-function linear_naninterp(u, v)
-    # To be added
-end
+# function linear_naninterp(u, v)
+#     # To be added
+# end
 
 # End module
 end
