@@ -1,11 +1,18 @@
-nei = [
-    3   1   1;
-    5   1  30;
-    5   1  41;
-    2   1  52;
-    0   1  53;
-    0   1  54;
-    0   1  55;
-    0   1  56]
-# Sort the rows
-nei = sortslices(nei, dims=1)
+using ScatteredInterpolation
+
+sample = [23 51 10 NaN 8;
+          19 20 NaN NaN 3; 
+          103 7 7 113 23]
+
+coords = findall(x -> isnan(x), sample)
+coords_M = hcat([i[1] for i in coords], [i[2] for i in coords])
+
+itp = interpolate(Multiquadratic(), coords_M', sample) 
+
+for c in coords
+    c = [c[1]; c[2]]
+    @show sample[c]
+    @show c
+    sample[c] = evaluate(itp, c)
+    # @show sample[c]
+end

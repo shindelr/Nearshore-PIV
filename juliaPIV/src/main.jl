@@ -7,9 +7,8 @@ using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
 using ProgressBars
 using Skipper         # Special skipping library to skip NaNs and other things
-using Interpolations
-# using Dierckx
-# using GridInterpolations
+# using Interpolations
+using ScatteredInterpolation
 using Plots
 
 # User defined modules
@@ -88,12 +87,12 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                             sx - 2 * next_win_x + 1) .+ next_win_x
                     XI = (1:((1 - overlap) * next_win_x):
                             sx - next_win_x + 1) .+ (next_win_x / 2)
-                    XI = XI[2:end - 1]
                 else
                     X = (1:((1 - overlap) * next_win_x):
                             sx - next_win_x + 1) .+ (next_win_x / 2)
                     XI = (1:((1 - overlap) * next_win_x):
                             sx - next_win_x + 1) .+ (next_win_x / 2)
+                    X = copy(XI)
                 end
 
                 if wins[i, 2] != next_win_y
@@ -101,34 +100,40 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                             sy - 2 * next_win_y + 1) .+ next_win_y
                     YI = (1:((1 - overlap) * next_win_y):
                             sy - next_win_y + 1) .+ (next_win_y / 2)
-                    YI = YI[2:end - 1]
                 else
                     Y = (1:((1 - overlap) * next_win_y):
                             sy - next_win_y + 1) .+ (next_win_y / 2)
                     YI = (1:((1 - overlap) * next_win_y):
                             sy - next_win_y + 1) .+ (next_win_y / 2)
+                    Y = copy(YI)
                 end
 
+                # writedlm("tests/juliaOut/jtest_X.csv", round.(Int,X'), ',')
+
                 # Creating new NaN matrices to interpolate into
-                m = length(YI)
-                n = length(XI)
-                itp_datax = fill(NaN, m+2, n+2)
-                itp_datay = fill(NaN, m+2, n+2)
+                # m = length(YI)
+                # n = length(XI)
+                # itp_datax = fill(NaN, m+2, n+2)
+                # itp_datay = fill(NaN, m+2, n+2)
 
                 # Build interpolate func, layer onto datax, copy into NaN matrix
-                itp_x = interpolate((Y, X), datax, Gridded(Linear()))
-                datax = [itp_x(yi, xi) for yi in YI, xi in XI]
-                itp_datax[2:end-1, 2:end-1] = round.(Int, datax)
- 
-                itp_y = interpolate((Y, X), datay, Gridded(Linear()))
-                datay = [itp_y(yi, xi) for yi in YI, xi in XI]
-                # itp_datay[2:end-1, 2:end-1] = round.(Int, datay)
-                itp_datay[2:end-1, 2:end-1] = datay
+                # itp_x = interpolate((Y, X), datax, Gridded(Linear()))
+                # datax = [itp_x(yi, xi) for yi in YI, xi in XI]
                 
-                writedlm("tests/juliaOut/jtest_DATAY.csv", itp_datay, ',')
+                # itp_y = interpolate((Y, X), datay, Gridded(Linear()))
+                # datay = [itp_y(yi, xi) for yi in YI, xi in XI]
+
+
+                
+                # itp_datax[2:end-1, 2:end-1] = round.(Int, datax)
+                # itp_datay[2:end-1, 2:end-1] = round.(Int, datay)
+                
+                # writedlm("tests/juliaOut/jtest_DATAX.csv", datax, ',')
 
                 # Interpolate out the NaN's we put in
                 # datax, datay = linear_naninterp(itp_datax, itp_datay)
+
+
                 
                 # datax = round.(Int, datax)
                 # datay = round.(Int, datay)
@@ -524,6 +529,12 @@ function linear_naninterp(u, v)
         # display(coords)
     end
     return u, v
+end
+
+function naninterp(u, v)
+    coords = findall(x->isnan(x), u)
+
+
 end
 
 # MAIN

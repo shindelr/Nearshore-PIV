@@ -547,10 +547,12 @@ sensit = 3;
         Y=YI; 
       end
 
+      writematrix(X, "../tests/mlabOut/mtest_X.csv");
+
       datax=round(interp2(X,Y',datax,XI,YI'));
       datay=interp2(X,Y',datay,XI,YI');
       % datay=round(interp2(X,Y',datay,XI,YI'));
-      
+
       % [datax,datay]=naninterp(datax, datay, 'linear', [], ...
       %                         repmat(XI, size(datax, 1), 1), ...
       %                         repmat(YI', 1, size(datax, 2)) ...
@@ -560,7 +562,6 @@ sensit = 3;
       % datay=round(datay);
       
       % writematrix(datax, "../tests/mlabOut/mtest_DATAX.csv");
-      writematrix(datay, "../tests/mlabOut/mtest_DATAY.csv");
     end
 % end
 
