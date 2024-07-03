@@ -62,7 +62,9 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             datax, datay = localfilt(x, y, datax, datay, sensit)
             # TESTING: 13 differences, same as detected prior.
             
-            datax, datay = linear_naninterp(datax, datay)
+            datax, datay = naninterp(datax, datay)
+
+            # datax, datay = linear_naninterp(datax, datay)
             # TESTING: 43 differences. We're going to need to debug firstpass
             # to see why datax, datay are experiencing differences.
             
@@ -532,9 +534,24 @@ function linear_naninterp(u, v)
 end
 
 function naninterp(u, v)
-    coords = findall(x->isnan(x), u)
+    # Dataset U first
+    nan_coords_u = findall(x -> isnan(x), u)
+    non_nan_coords_u = findall(x -> !isnan(x), u)
+    non_nan_coords_M_u = hcat([i[1] for i in non_nan_coords_u], [i[2] for i in non_nan_coords_u])
+    non_nan_vals_u = [u[c] for c in non_nan_coords]
 
+    itp = interpolate(Multiquadratic(), non_nan_coords_M_u', non_nan_vals_u)
+    for c in nan_coords_u
+        c_m = [c[1]; c[2]]
+        itp_val_vec = ScatteredInterpolation.evaluate(itp, c_m)
+        itp_val = itp_val_vec[1]
+        u[c] = itp_val
+    end
 
+    # Dataset V second
+    nan_coords_v = findall(x->isnan(x), v)
+
+    return u, v
 end
 
 # MAIN
