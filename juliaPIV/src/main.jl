@@ -62,19 +62,32 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             datax, datay = localfilt(x, y, datax, datay, sensit)
             # TESTING: 13 differences, same as detected prior.
             
-            datax, datay = naninterp(datax, datay)
+            # writedlm("tests/juliaOut/naninterp_testing/jtest_filtDATAX.csv", datax, ',')
+
+            datax = naninterp(datax)
+            datay = naninterp(datay)
+            # TESTING: 60 differences with Multiquadratic() -- Maybe best extrapolation?
+            # TESTING: 53 differences with InverseMultiquadratic()
+            # TESTING: 53 differences with Gaussian() -- BAD
+            # TESTING: 43 difference with linear_naninterp() -- Closest to MATLAB
+            # TESTING: 50 differences with InverseQuadratic()
+            # TESTING: 52 differences with Polyharmonic() 
+
 
             # datax, datay = linear_naninterp(datax, datay)
+
             # TESTING: 43 differences. We're going to need to debug firstpass
             # to see why datax, datay are experiencing differences.
-            
+
             datax = floor.(Int, datax)
             datay = floor.(Int, datay)
             """TESTING: 12-15 differences almost all in the same columns and rows
             as one another. But after flooring the matrices to integers, the
             43 differences above smoothed out, could've just been differences
             in data representation. This problem must stem back to firstpass."""
-            # writedlm("tests/juliaOut/jtest_INTERPDATAX.csv", datax, ',')
+            # TESTING: 
+            writedlm("tests/juliaOut/naninterp_testing/jtest_roundedNearestNeighbDATAX.csv", datax, ',')
+
 
             # Different process for the final pass
             if i != iter - 1
@@ -181,6 +194,7 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
         P = plan_fft(A[1:M, 1:N])
     end
 
+    # Initializing matrices
     sy, sx = size(A)
     xx_dim1 = ceil(Int, ((size(A,1)-N) / ((1-overlap) * N))) + 1
     xx_dim2 = ceil(Int, ((size(A,2)-M) / ((1-overlap) * M))) + 1
@@ -396,7 +410,7 @@ function xcorrf2(A, B, plan, pad=true)
     return c
 end
 
-# FILTERS
+# FILTERS and Interpolations
 """
 ### linear_naninterp
     Interpolates NaN's in a vectorfield. Sorts all spurious 
@@ -533,25 +547,22 @@ function linear_naninterp(u, v)
     return u, v
 end
 
-function naninterp(u, v)
-    # Dataset U first
-    nan_coords_u = findall(x -> isnan(x), u)
-    non_nan_coords_u = findall(x -> !isnan(x), u)
-    non_nan_coords_M_u = hcat([i[1] for i in non_nan_coords_u], [i[2] for i in non_nan_coords_u])
-    non_nan_vals_u = [u[c] for c in non_nan_coords]
+function naninterp(sample)
+    nan_coords = findall(x -> isnan(x), sample)
+    non_nan_coords= findall(x -> !isnan(x), sample)
+    non_nan_coords_matrix = hcat([i[1] for i in non_nan_coords], [i[2] for i in non_nan_coords])
+    non_nan_vals= [sample[c] for c in non_nan_coords]
 
-    itp = interpolate(Multiquadratic(), non_nan_coords_M_u', non_nan_vals_u)
-    for c in nan_coords_u
-        c_m = [c[1]; c[2]]
-        itp_val_vec = ScatteredInterpolation.evaluate(itp, c_m)
+    # itp = interpolate(Multiquadratic(), non_nan_coords_matrix', non_nan_vals)
+    itp = interpolate(NearestNeighbor(), non_nan_coords_matrix', non_nan_vals)
+    for c in nan_coords
+        c_extracted = [c[1]; c[2]]
+        itp_val_vec = ScatteredInterpolation.evaluate(itp, c_extracted)
         itp_val = itp_val_vec[1]
-        u[c] = itp_val
+        sample[c] = itp_val
     end
 
-    # Dataset V second
-    nan_coords_v = findall(x->isnan(x), v)
-
-    return u, v
+    return sample
 end
 
 # MAIN

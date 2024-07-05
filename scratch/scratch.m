@@ -524,11 +524,12 @@ sensit = 3;
 
     % validation
     [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
+    writematrix(datax, "../tests/mlabOut/naninterp_testing/mtest_filtDATAX.csv");
 
     [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
+    
     datax=floor(datax);
     datay=floor(datay);
-    % writematrix(datay, "../tests/mlabOut/mtestINTERP_DATAY.csv");
 
     % % expand the velocity data to twice the original size
     if(i~=iter-1)
@@ -547,7 +548,7 @@ sensit = 3;
         Y=YI; 
       end
 
-      writematrix(X, "../tests/mlabOut/mtest_X.csv");
+      % writematrix(X, "../tests/mlabOut/mtest_X.csv");
 
       datax=round(interp2(X,Y',datax,XI,YI'));
       datay=interp2(X,Y',datay,XI,YI');
