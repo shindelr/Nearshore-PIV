@@ -66,28 +66,22 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
 
             datax = naninterp(datax)
             datay = naninterp(datay)
-            # TESTING: 60 differences with Multiquadratic() -- Maybe best extrapolation?
-            # TESTING: 53 differences with InverseMultiquadratic()
+            # TESTING: 60 differences with Multiquadratic() -- Interesting blobs in top zone
+            # TESTING: 53 differences with InverseMultiquadratic() -- Might be best balance between top zone and center
             # TESTING: 53 differences with Gaussian() -- BAD
             # TESTING: 43 difference with linear_naninterp() -- Closest to MATLAB
-            # TESTING: 50 differences with InverseQuadratic()
-            # TESTING: 52 differences with Polyharmonic() 
+            # TESTING: 50 differences with InverseQuadratic() -- Much more uniform extrapolation into the top but more spotty in the center
+            # TESTING: 52 differences with Polyharmonic() -- weird blob in top left
 
-
+            # OG MATLAB IMPLEMENTATION
             # datax, datay = linear_naninterp(datax, datay)
-
             # TESTING: 43 differences. We're going to need to debug firstpass
             # to see why datax, datay are experiencing differences.
 
             datax = floor.(Int, datax)
             datay = floor.(Int, datay)
-            """TESTING: 12-15 differences almost all in the same columns and rows
-            as one another. But after flooring the matrices to integers, the
-            43 differences above smoothed out, could've just been differences
-            in data representation. This problem must stem back to firstpass."""
-            # TESTING: 
-            writedlm("tests/juliaOut/naninterp_testing/jtest_roundedNearestNeighbDATAX.csv", datax, ',')
 
+            # writedlm("tests/juliaOut/naninterp_testing/jtest_DATAX.csv", datax, ',')
 
             # Different process for the final pass
             if i != iter - 1
@@ -96,8 +90,6 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
 
                 # Final window size is duplicated, so check for equality.
                 if wins[i, 1] != next_win_x
-                    # First time: X = [1:32:3009] .+ 32
-                    # X = 33, 65, ..., 3041   size = 95
                     X = (1:((1 - overlap) * 2 * next_win_x):
                             sx - 2 * next_win_x + 1) .+ next_win_x
                     XI = (1:((1 - overlap) * next_win_x):
@@ -122,8 +114,20 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                             sy - next_win_y + 1) .+ (next_win_y / 2)
                     Y = copy(YI)
                 end
+                # note: XI, YI, Y, X values and sizes match matlab on i=1
 
-                # writedlm("tests/juliaOut/jtest_X.csv", round.(Int,X'), ',')
+                @show size(YI) size(XI) size(Y) size(X)
+
+                @show size(x_grid)
+                @show x_grid
+
+                # fine_grid = getindex.(Iterators.product(XI, YI))
+                # @show size(fine_grid)
+                # @show eltype(fine_grid)
+                
+                # itp_x = interpolate(InverseMultiquadratic(), fine_grid, datax)
+
+
 
                 # Creating new NaN matrices to interpolate into
                 # m = length(YI)
@@ -137,19 +141,13 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                 
                 # itp_y = interpolate((Y, X), datay, Gridded(Linear()))
                 # datay = [itp_y(yi, xi) for yi in YI, xi in XI]
-
-
                 
                 # itp_datax[2:end-1, 2:end-1] = round.(Int, datax)
                 # itp_datay[2:end-1, 2:end-1] = round.(Int, datay)
-                
-                # writedlm("tests/juliaOut/jtest_DATAX.csv", datax, ',')
 
                 # Interpolate out the NaN's we put in
                 # datax, datay = linear_naninterp(itp_datax, itp_datay)
 
-
-                
                 # datax = round.(Int, datax)
                 # datay = round.(Int, datay)
 
@@ -553,8 +551,7 @@ function naninterp(sample)
     non_nan_coords_matrix = hcat([i[1] for i in non_nan_coords], [i[2] for i in non_nan_coords])
     non_nan_vals= [sample[c] for c in non_nan_coords]
 
-    # itp = interpolate(Multiquadratic(), non_nan_coords_matrix', non_nan_vals)
-    itp = interpolate(NearestNeighbor(), non_nan_coords_matrix', non_nan_vals)
+    itp = interpolate(InverseMultiquadratic(), non_nan_coords_matrix', non_nan_vals)
     for c in nan_coords
         c_extracted = [c[1]; c[2]]
         itp_val_vec = ScatteredInterpolation.evaluate(itp, c_extracted)
@@ -593,7 +590,7 @@ function main(A, B)
 
     # other input params for piv
     dt = 1; overlap = 0.5; validvec = 3
-    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
+    @time x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     # !!!!!Profile stuff goes here and rest of main() lol !!!!!
@@ -609,5 +606,5 @@ im2_path = "juliaPIV/data/im2.jpg"
 A = load(im1_path)
 B = load(im2_path)
 
-@time main(A, B)
+main(A, B)
 # ------ TEST ZONE ------
