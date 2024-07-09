@@ -116,16 +116,41 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                 end
                 # note: XI, YI, Y, X values and sizes match matlab on i=1
 
-                @show size(YI) size(XI) size(Y) size(X)
+                @show size(YI) size(XI) eltype(Y) size(X) size(datax) size(datay)
 
-                @show size(x_grid)
-                @show x_grid
+                # Collect coarse points to interpolate on
+                points = collect.(Iterators.product(X, Y))
+                points_coords = hcat([Tuple(p) for p in points]...)
+                points_coords_matrix = hcat([i[1] for i in points_coords], [i[2] for i in points_coords])   
 
-                # fine_grid = getindex.(Iterators.product(XI, YI))
-                # @show size(fine_grid)
-                # @show eltype(fine_grid)
-                
-                # itp_x = interpolate(InverseMultiquadratic(), fine_grid, datax)
+                # Collect values to interpolate using coords above
+                points_vals_datax = vec(datax)
+                points_vals_datay = vec(datay)
+
+                # Interpolate!
+                itp_x = interpolate(InverseMultiquadratic(), points_coords_matrix', points_vals_datax)
+                itp_y = interpolate(InverseMultiquadratic(), points_coords_matrix', points_vals_datay)
+
+                # Create fine grid
+                fine_grid_points = collect.(Iterators.product(XI, YI))
+                fine_coords = hcat([Tuple(p) for p in fine_grid_points]...)
+                fine_coords_m = hcat([i[1] for i in fine_coords], [i[2] for i in fine_coords])   
+
+                interpolated_datax = ScatteredInterpolation.evaluate(itp_x, fine_coords_m')
+
+
+                # for p in fine_grid_points
+                #         itp_val_vec_x = ScatteredInterpolation.evaluate(itp_x, p)
+                #         itp_val_vec_y = ScatteredInterpolation.evaluate(itp_y, p)
+                #         # itp_val = itp_val_vec[1]
+                #         # sample[c] = itp_val
+                # end
+
+
+
+
+                # interpolated_datay = ScatteredInterpolation.evaluate(itp_y, fine_grid)
+
 
 
 
