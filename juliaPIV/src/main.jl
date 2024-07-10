@@ -7,7 +7,7 @@ using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
 using ProgressBars
 using Skipper         # Special skipping library to skip NaNs and other things
-# using Interpolations
+using Interpolations
 using ScatteredInterpolation
 using Plots
 
@@ -81,7 +81,7 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             datax = floor.(Int, datax)
             datay = floor.(Int, datay)
 
-            # writedlm("tests/juliaOut/naninterp_testing/jtest_DATAX.csv", datax, ',')
+            writedlm("tests/juliaOut/naninterp_testing/jtest_DATAX.csv", datax, ',')
 
             # Different process for the final pass
             if i != iter - 1
@@ -116,27 +116,36 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                 end
                 # note: XI, YI, Y, X values and sizes match matlab on i=1
 
-                @show size(YI) size(XI) eltype(Y) size(X) size(datax) size(datay)
+                datax = regular_interp(datax, X, Y, XI, YI)
+                datay = regular_interp(datay, X, Y, XI, YI)
 
-                # Collect coarse points to interpolate on
-                points = collect.(Iterators.product(X, Y))
-                points_coords = hcat([Tuple(p) for p in points]...)
-                points_coords_matrix = hcat([i[1] for i in points_coords], [i[2] for i in points_coords])   
+                
 
-                # Collect values to interpolate using coords above
-                points_vals_datax = vec(datax)
-                points_vals_datay = vec(datay)
 
-                # Interpolate!
-                itp_x = interpolate(InverseMultiquadratic(), points_coords_matrix', points_vals_datax)
-                itp_y = interpolate(InverseMultiquadratic(), points_coords_matrix', points_vals_datay)
 
-                # Create fine grid
-                fine_grid_points = collect.(Iterators.product(XI, YI))
-                fine_coords = hcat([Tuple(p) for p in fine_grid_points]...)
-                fine_coords_m = hcat([i[1] for i in fine_coords], [i[2] for i in fine_coords])   
 
-                interpolated_datax = ScatteredInterpolation.evaluate(itp_x, fine_coords_m')
+# ====================== ScatteredInterpolation.jl ==========================
+                # # Collect coarse points to interpolate on
+                # points = collect.(Iterators.product(X, Y))
+                # points_coords = hcat([Tuple(p) for p in points]...)
+                # points_coords_matrix = hcat([i[1] for i in points_coords], [i[2] for i in points_coords])   
+
+                # display(points_coords_matrix)
+
+                # # Collect values to interpolate using coords above
+                # points_vals_datax = vec(datax)
+                # points_vals_datay = vec(datay)
+
+                # # Interpolate!
+                # itp_x = interpolate(InverseMultiquadratic(), points_coords_matrix', points_vals_datax)
+                # itp_y = interpolate(InverseMultiquadratic(), points_coords_matrix', points_vals_datay)
+
+                # # Create fine grid
+                # fine_grid_points = collect.(Iterators.product(XI, YI))
+                # fine_coords = hcat([Tuple(p) for p in fine_grid_points]...)
+                # fine_coords_m = hcat([i[1] for i in fine_coords], [i[2] for i in fine_coords])   
+
+                # interpolated_datax = ScatteredInterpolation.evaluate(itp_x, fine_coords_m')
 
 
                 # for p in fine_grid_points
@@ -145,15 +154,13 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                 #         # itp_val = itp_val_vec[1]
                 #         # sample[c] = itp_val
                 # end
+# ====================== ScatteredInterpolation.jl ==========================
 
 
 
+            
 
-                # interpolated_datay = ScatteredInterpolation.evaluate(itp_y, fine_grid)
-
-
-
-
+# ====================== Interpolations.jl ==========================
                 # Creating new NaN matrices to interpolate into
                 # m = length(YI)
                 # n = length(XI)
@@ -161,21 +168,22 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                 # itp_datay = fill(NaN, m+2, n+2)
 
                 # Build interpolate func, layer onto datax, copy into NaN matrix
-                # itp_x = interpolate((Y, X), datax, Gridded(Linear()))
+                # itp_x = Interpolations.interpolate((Y, X), datax, Gridded(Linear()))
                 # datax = [itp_x(yi, xi) for yi in YI, xi in XI]
                 
-                # itp_y = interpolate((Y, X), datay, Gridded(Linear()))
+                # itp_y = Interpolations.interpolate((Y, X), datay, Gridded(Linear()))
                 # datay = [itp_y(yi, xi) for yi in YI, xi in XI]
                 
-                # itp_datax[2:end-1, 2:end-1] = round.(Int, datax)
-                # itp_datay[2:end-1, 2:end-1] = round.(Int, datay)
+                # # itp_datax[2:end-1, 2:end-1] = round.(Int, datax)
+                # # itp_datay[2:end-1, 2:end-1] = round.(Int, datay)
 
-                # Interpolate out the NaN's we put in
-                # datax, datay = linear_naninterp(itp_datax, itp_datay)
+                # # Interpolate out the NaN's we put in
+                # # datax, datay = linear_naninterp(itp_datax, itp_datay)
 
                 # datax = round.(Int, datax)
                 # datay = round.(Int, datay)
-
+# ====================== Interpolations.jl ==========================
+ 
             end
         # end
 
@@ -576,7 +584,7 @@ function naninterp(sample)
     non_nan_coords_matrix = hcat([i[1] for i in non_nan_coords], [i[2] for i in non_nan_coords])
     non_nan_vals= [sample[c] for c in non_nan_coords]
 
-    itp = interpolate(InverseMultiquadratic(), non_nan_coords_matrix', non_nan_vals)
+    itp = ScatteredInterpolation.interpolate(InverseMultiquadratic(), non_nan_coords_matrix', non_nan_vals)
     for c in nan_coords
         c_extracted = [c[1]; c[2]]
         itp_val_vec = ScatteredInterpolation.evaluate(itp, c_extracted)
@@ -585,6 +593,26 @@ function naninterp(sample)
     end
 
     return sample
+end
+
+function regular_interp(samples, xs, ys, XI, YI)
+    itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
+    extp = Interpolations.extrapolate(itp, Line())
+
+    itp_results = zeros(Float64, (length(YI), length(XI)))
+
+    for (mi, yi) in enumerate(YI)
+        for (ni, xi) in enumerate(XI)
+            if (33 < xi < 3041) && (33 < yi < 2017)
+                itp_results[mi, ni] = itp(yi, xi)
+            else
+                itp_results[mi, ni] = extp(yi, xi)
+            end
+        end
+    end
+
+    return round.(Int, itp_results)
+
 end
 
 # MAIN

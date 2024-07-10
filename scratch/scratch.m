@@ -526,7 +526,6 @@ sensit = 3;
     [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
 
     [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
-    writematrix(datax, "../tests/mlabOut/naninterp_testing/mtest_1stNaNinterpDATAX.csv");
     
     datax=floor(datax);
     datay=floor(datay);
@@ -552,14 +551,17 @@ sensit = 3;
       datax=round(interp2(X, Y', datax, XI, YI'));
       datay=round(interp2(X, Y', datay, XI, YI'));
 
-      % [datax,datay]=naninterp(datax, datay, 'linear', [], ...
-      %                         repmat(XI, size(datax, 1), 1), ...
-      %                         repmat(YI', 1, size(datax, 2)) ...
-      %                         ); 
+      [datax,datay]=naninterp(datax, datay, 'linear', [], ...
+                              repmat(XI, size(datax, 1), 1), ...
+                              repmat(YI', 1, size(datax, 2)) ...
+                              ); 
       
-      % datax=round(datax);
-      % datay=round(datay);
+      datax=round(datax);
+      datay=round(datay);
       
+      writematrix(datax, "../tests/mlabOut/normal_interp/m_fully_itpd.csv");
+
+
     end
 % end
 
