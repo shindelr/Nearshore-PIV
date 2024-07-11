@@ -559,7 +559,9 @@ sensit = 3;
       datax=round(datax);
       datay=round(datay);
       
-      writematrix(datax, "../tests/mlabOut/normal_interp/m_fully_itpd.csv");
+      % writematrix(datax, "../tests/mlabOut/normal_interp/m_fully_itpd.csv");
+
+      disp(size(datax)); disp(size(datay));
 
 
     end

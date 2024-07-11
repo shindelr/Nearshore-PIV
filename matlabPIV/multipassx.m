@@ -55,6 +55,7 @@ for i=1:iter-1
   end
 
 end
+writematrix(datax, "../tests/mlabOut/normal_interp/penultimate_loop.csv")
 
 % Final pass gives displacement to subpixel accuracy
 disp('Final iteration')

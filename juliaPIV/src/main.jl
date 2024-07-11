@@ -15,6 +15,7 @@ using Plots
 include("./filtering.jl")
 using .PIVFilters: localfilt #linear_naninterp
 
+
 # PASS FUNCTIONS 
 """
 ### multipassx
@@ -34,38 +35,30 @@ using .PIVFilters: localfilt #linear_naninterp
     Pkh: Peak height for use in validation of vector field?\n
 """
 function multipassx(A, B, wins, Dt, overlap, sensit)
-    # Convert A, B to floats
+    # Convert the images to matrices to floats
     A = convert(Matrix{Float64}, A)
     B = convert(Matrix{Float64}, B)
 
     sy, sx = size(A)
-    iter = size(wins, 1)
+    total_passes = size(wins, 1)
 
     # Initial passes are for removing large-scale displacements.  Initialize
     # displacements (datax,datay) to zero
     data_dim_1 = floor(Int64, (sy/(wins[1,1] * (1-overlap))))
-    data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap)))) 
+    data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
-    datay = zeros(eltype(A), (data_dim_1, data_dim_2))
+    datay = copy(datax)
 
-    # Disabled loop for testing
-    # Getting slight errors on datay and datax. Last test showed 5 differences.
-        for i in 1:iter-1
-            println("Iter ", i, " of ", iter )
-            # PIV proper
-            # i = 1
-
-            # writedlm("tests/juliaOut/jtest_DATAX.csv", datax, ',')
+        for i in 1:total_passes - 1
+            println("Pass ", i, " of ", total_passes )
 
             x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
             
             datax, datay = localfilt(x, y, datax, datay, sensit)
             # TESTING: 13 differences, same as detected prior.
-            
-            # writedlm("tests/juliaOut/naninterp_testing/jtest_filtDATAX.csv", datax, ',')
+            # datax = naninterp(datax, i)
+            # datay = naninterp(datay, i)
 
-            datax = naninterp(datax)
-            datay = naninterp(datay)
             # TESTING: 60 differences with Multiquadratic() -- Interesting blobs in top zone
             # TESTING: 53 differences with InverseMultiquadratic() -- Might be best balance between top zone and center
             # TESTING: 53 differences with Gaussian() -- BAD
@@ -74,34 +67,35 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             # TESTING: 52 differences with Polyharmonic() -- weird blob in top left
 
             # OG MATLAB IMPLEMENTATION
-            # datax, datay = linear_naninterp(datax, datay)
+            datax, datay = linear_naninterp(datax, datay)
             # TESTING: 43 differences. We're going to need to debug firstpass
             # to see why datax, datay are experiencing differences.
 
             datax = floor.(Int, datax)
             datay = floor.(Int, datay)
 
-            # writedlm("tests/juliaOut/naninterp_testing/jtest_DATAX.csv", datax, ',')
+            if i != total_passes - 1
+                X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
 
-            X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i, iter)
-
-            datax = regular_interp(datax, X, Y, XI, YI)
-            datay = regular_interp(datay, X, Y, XI, YI)
-
-            # STILL NEEDS TESTING, BUT APPEARS TO BE WORKING
+                # STILL NEEDS TESTING, BUT IS NOT CRASHING AT LEAST
+                datax = regular_interp(datax, X, Y, XI, YI)
+                datay = regular_interp(datay, X, Y, XI, YI)
+            end
 
         end
+        writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
+
+        println("Final Pass")
 
     # Dummy values
     x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
     return x, y, u, v, SnR, Pkh
 end
 
-# Should break up this func into multiple functions. It's huge!
 """
 ### firstpass
-*Note: First pass is a misnomer for this function, as it's called N-1 times
-depending on the size of the given windows. Consider renaming*\n\n
+    *Note: First pass is a misnomer for this function, as it's called N-1 times
+    depending on the size of the given windows. Consider renaming*\n\n
     Set up matrix indices along the image frame according to the desired overlap and \
     window sizes. Calls **xcorrf2** which finally uses FFTs to calculate cross \
     correlation.
@@ -134,16 +128,16 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
     xx_dim1 = ceil(Int, ((size(A,1)-N) / ((1-overlap) * N))) + 1
     xx_dim2 = ceil(Int, ((size(A,2)-M) / ((1-overlap) * M))) + 1
     xx = zeros(eltype(A), (xx_dim1, xx_dim2))
-    yy = zeros(eltype(A), (xx_dim1, xx_dim2))
-    datax = zeros(eltype(A), (xx_dim1, xx_dim2))
-    datay = zeros(eltype(A), (xx_dim1, xx_dim2))
+    yy = copy(xx)
+    datax = copy(xx)
+    datay = copy(xx)
     IN = zeros(Int64, size(A))
 
     cj = 1
     for jj in 1:((1-overlap) * N):(sy - N + 1)
         ci = 1
         for ii in 1:((1-overlap) * M):(sx - M + 1)
-            # Using floor until I have more information! Could be a problem.
+            # Floor correct?
             IN_i_1 = floor(Int64, (jj + N/2))
             IN_i_2 = floor(Int64, (ii + M/2))
 
@@ -152,28 +146,31 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 if isnan(idx[cj, ci])
                     idx[cj, ci] = 0
                 end
+
                 if isnan(idy[cj, ci])
                     idy[cj, ci] = 0
                 end
+
                 if (jj + idy[cj, ci]) < 1
                     idy[cj, ci] = 1 - jj
                 elseif (jj + idy[cj, ci]) > (sy - N+1)
                     idy[cj, ci] = sy - N + 1 - jj
                 end
+
                 if (ii + idx[cj, ci]) < 1
                     idx[cj, ci] = 1 - ii
                 elseif (ii + idx[cj, ci]) > (sx - M + 1)
                     idx[cj, ci] = sx - M + 1 - ii
                 end
 
-                # Using floor until I have more information! Could be a problem.
+                # Floor correct?
                 C = A[floor(Int, jj):floor(Int, jj+N-1), 
                       floor(Int, ii):floor(Int, ii+M-1)]
                 D = B[floor(Int, jj+idy[cj, ci]):floor(Int, jj+N-1+idy[cj, ci]), 
                       floor(Int, ii+idx[cj, ci]):floor(Int, ii+M-1+idx[cj, ci])]
                 
                 C = C.-mean(C); D = D.-mean(D)
-                stad1 = std(C); stad2 = std(D)  # Might need to vec() these
+                stad1 = std(C); stad2 = std(D)
 
                 if stad1 == 0
                     stad1 = NaN
@@ -188,20 +185,9 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 else
                     R = xcorrf2(C, D, P, false) ./ ( N * M * stad1 * stad2)
                 end
-                
 
-            """
-                This was super tricky! Matlab and Julia have quite different 
-                implementations in this region. 
-                Julia has this findall function with a really nifty arrow syntax, 
-                but using it returns a strange vector of CartesianIndex objects that 
-                are pretty tough to work with. To handle it, I had to use some weird 
-                tuple unpacking operations and list comprehension that matlab didn't
-                need. I wonder how true Julia users would have done this section.
-            """
-                
                 # Find position of maximal value of R
-                if size(R, 1) == (N - 1)
+                if size(R, 1) == (N - 1)  # I think checking for second to last pass
                     max = maximum(R)
                     max_coords = findall(x -> x == max, R)
                 else
@@ -256,6 +242,7 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
     end
     return xx, yy, datax, datay
 end
+
 
 # FOURIER
 """
@@ -344,6 +331,7 @@ function xcorrf2(A, B, plan, pad=true)
     end
     return c
 end
+
 
 # FILTERS and Interpolations
 """
@@ -482,11 +470,19 @@ function linear_naninterp(u, v)
     return u, v
 end
 
-function naninterp(sample)
+function naninterp(sample, pass)
     nan_coords = findall(x -> isnan(x), sample)
     non_nan_coords= findall(x -> !isnan(x), sample)
     non_nan_coords_matrix = hcat([i[1] for i in non_nan_coords], [i[2] for i in non_nan_coords])
     non_nan_vals= [sample[c] for c in non_nan_coords]
+    println("made it: 479") # Last place it gets past
+
+    # Debugging
+    if pass == 2
+        # writedlm("tests/juliaOut/second_pass_interp/stuck_sample.csv", sample, ',')
+        display(non_nan_coords_matrix)
+        display(non_nan_vals)
+    end
 
     itp = ScatteredInterpolation.interpolate(InverseMultiquadratic(), non_nan_coords_matrix', non_nan_vals)
     for c in nan_coords
@@ -507,21 +503,23 @@ function regular_interp(samples, xs, ys, XI, YI)
 
     for (mi, yi) in enumerate(YI)
         for (ni, xi) in enumerate(XI)
+            # Interpolate the interior of the matrix
             if (33 < xi < 3041) && (33 < yi < 2017)
                 itp_results[mi, ni] = itp(yi, xi)
             else
+            # Extrapolate the exterior
                 itp_results[mi, ni] = extp(yi, xi)
             end
         end
     end
 
-    return round.(Int, itp_results)
+    # return round.(Int, itp_results)
+    # Returning float to stay compatible with the rest of the program?
+    return itp_results
 
 end
 
-function build_grids(wins, overlap, sx, sy, i, iter)
-    # Different process for the final pass
-    if i != iter - 1
+function build_grids(wins, overlap, sx, sy, i)
         next_win_x = wins[i + 1, 1]
         next_win_y = wins[i + 1, 2]
 
@@ -552,10 +550,9 @@ function build_grids(wins, overlap, sx, sy, i, iter)
             Y = copy(YI)
         end
 
-    end
-
     return X, Y, XI, YI
 end
+
 
 # MAIN
 """
@@ -587,9 +584,6 @@ function main(A, B)
     dt = 1; overlap = 0.5; validvec = 3
     @time x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # !!!!!Profile stuff goes here and rest of main() lol !!!!!
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     println("\n===============\nExiting now\n===============")
 end
 
