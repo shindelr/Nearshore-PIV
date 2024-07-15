@@ -1,6 +1,6 @@
 using Plots, DelimitedFiles
 
-j_array = readdlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", ',', Int64)
+j_array = readdlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", ',', Float64)
 m_array = readdlm("tests/mlabOut/multipass_loop/penultimate_loop.csv", ',', Float64)
 unmodified_m_array = readdlm("tests/mlabOut/naninterp_testing/mtest_unmodifiedDATAX.csv", ',', Float64)
 
@@ -23,5 +23,5 @@ mlab = heatmap(ygrid_m, xgrid_m, m_array, title="Matlab Penultimate Loop", c=:vi
 jl = heatmap(ygrid_j, xgrid_j, j_array, title="Julia Pentultimate Loop", c=:viridis)
 unmod_m = heatmap(ygrid_m_unmod, xgrid_m_unmod, unmodified_m_array, title="Unmodified Matlab Data", c=:viridis)
 
-savefig(mlab, "tests/heatmaps/m_fully_itpd.png")
-savefig(jl, "tests/heatmaps/scratch_samples.png")
+savefig(mlab, "tests/heatmaps/m_penultimate_loop.png")
+savefig(jl, "tests/heatmaps/j_penultimate_loop.png")

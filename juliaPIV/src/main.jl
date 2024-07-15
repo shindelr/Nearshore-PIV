@@ -54,11 +54,12 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
 
             x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
             
-            datax, datay = localfilt(x, y, datax, datay, sensit)
             # TESTING: 13 differences, same as detected prior.
+            datax, datay = localfilt(x, y, datax, datay, sensit)
+
+            # Not currently working on second iteration?
             # datax = naninterp(datax, i)
             # datay = naninterp(datay, i)
-
             # TESTING: 60 differences with Multiquadratic() -- Interesting blobs in top zone
             # TESTING: 53 differences with InverseMultiquadratic() -- Might be best balance between top zone and center
             # TESTING: 53 differences with Gaussian() -- BAD
@@ -80,12 +81,18 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
                 # STILL NEEDS TESTING, BUT IS NOT CRASHING AT LEAST
                 datax = regular_interp(datax, X, Y, XI, YI)
                 datay = regular_interp(datay, X, Y, XI, YI)
-            end
 
+                datax = round.(Float64, datax)
+                datay = round.(Float64, datay)
+            end
         end
-        writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
+
+        # writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
 
         println("Final Pass")
+
+        x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
+
 
     # Dummy values
     x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
@@ -241,6 +248,41 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
         cj += 1
     end
     return xx, yy, datax, datay
+end
+
+"""
+### finalpass
+    TODO: Write me.
+
+    OG docstring
+    Provides the final pass to get the displacements with
+    subpixel resolution.
+
+
+
+    1999 - 2011, J. Kristian Sveen (jks@math.uio.no)
+    For use with MatPIV 1.7, Copyright
+    Distributed under the terms of the GNU - GPL license
+    timestamp: 09:26, 4 Mar 2011
+"""
+function finalpass(A, B, N, ol, idx, idy, Dt)
+    # Set up
+    if length(N) == 1
+        M = N
+    else
+        M = N(1); N = N(2)
+
+    cj = 1
+    sy, sx = size(A)
+    dim_1 = ceil((sy - N) / ((1 - ol) * N)) + 1
+    dim_2 = ceil((sx - M) / ((1 - ol) * M)) + 1
+    xp = zeros(Float64, (dim_1, dim_2))
+    yp = copy(xp); up = copy(xp); vp = copy(xp); SnR = copy(xp); Pkh = copy(xp)
+
+    # Main pass loop
+    
+
+
 end
 
 

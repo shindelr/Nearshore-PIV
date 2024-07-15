@@ -7,8 +7,8 @@ function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
 %
 % Provides the final pass to get the displacements with
 % subpixel resolution.
-%
-%
+
+
 
 % 1999 - 2011, J. Kristian Sveen (jks@math.uio.no)
 % For use with MatPIV 1.7, Copyright
