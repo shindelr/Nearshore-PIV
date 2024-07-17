@@ -71,6 +71,10 @@ function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
           max_y1=round(sum(max_y1.^2)./sum(max_y1));
         end
 
+        if max_x1 == 1 || max_y1 == 1 
+          disp([max_x1, max_y1]);
+        end
+
         if max_x1==1
           max_x1=2;
         end
@@ -709,7 +713,6 @@ for i=1:iter-1
     disp(['iter ' num2str(i) ' of ' num2str(iter)]);
 
     [x,y,datax,datay] = firstpass(A, B, wins(i, :), overlap, datax, datay);
-
     % validation
     [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
 
@@ -717,7 +720,6 @@ for i=1:iter-1
     
     datax=floor(datax);
     datay=floor(datay);
-
 
     % % expand the velocity data to twice the original size
     if(i~=iter-1)
@@ -747,16 +749,16 @@ for i=1:iter-1
       datax=round(datax);
       datay=round(datay);
       
-      % writematrix(datax, "../tests/mlabOut/normal_interp/m_fully_itpd.csv");
 
     end
 end
+% writematrix(datax, "../tests/mlabOut/penultimate_datax.csv");
 
-% % Final pass gives displacement to subpixel accuracy
-disp('Final iteration')
+% % % Final pass gives displacement to subpixel accuracy
+% disp('Final iteration')
 
-% % Call plan_fft
+% % % Call plan_fft
 
-[x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
+% [x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
 
 % ------ TEST ZONE ------

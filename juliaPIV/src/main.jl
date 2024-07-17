@@ -48,50 +48,51 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = copy(datax)
+    for i in 1:total_passes - 1
+        println("Pass ", i, " of ", total_passes )
+    
+    x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
+    
 
-        # for i in 1:total_passes - 1
-        #     println("Pass ", i, " of ", total_passes )
+    datax, datay = localfilt(x, y, datax, datay, sensit)
+    # TESTING: Down to 10 differences!
 
-        #     x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
-            
-        #     # TESTING: 13 differences, same as detected prior.
-        #     datax, datay = localfilt(x, y, datax, datay, sensit)
+    #     # Not currently working on second iteration?
+    #     # datax = naninterp(datax, i)
+    #     # datay = naninterp(datay, i)
+    #     # TESTING: 60 differences with Multiquadratic() -- Interesting blobs in top zone
+    #     # TESTING: 53 differences with InverseMultiquadratic() -- Might be best balance between top zone and center
+    #     # TESTING: 53 differences with Gaussian() -- BAD
+    #     # TESTING: 43 difference with linear_naninterp() -- Closest to MATLAB
+    #     # TESTING: 50 differences with InverseQuadratic() -- Much more uniform extrapolation into the top but more spotty in the center
+    #     # TESTING: 52 differences with Polyharmonic() -- weird blob in top left
 
-        #     # Not currently working on second iteration?
-        #     # datax = naninterp(datax, i)
-        #     # datay = naninterp(datay, i)
-        #     # TESTING: 60 differences with Multiquadratic() -- Interesting blobs in top zone
-        #     # TESTING: 53 differences with InverseMultiquadratic() -- Might be best balance between top zone and center
-        #     # TESTING: 53 differences with Gaussian() -- BAD
-        #     # TESTING: 43 difference with linear_naninterp() -- Closest to MATLAB
-        #     # TESTING: 50 differences with InverseQuadratic() -- Much more uniform extrapolation into the top but more spotty in the center
-        #     # TESTING: 52 differences with Polyharmonic() -- weird blob in top left
+    #     # OG MATLAB IMPLEMENTATION
+        datax, datay = linear_naninterp(datax, datay)
 
-        #     # OG MATLAB IMPLEMENTATION
-        #     datax, datay = linear_naninterp(datax, datay)
-        #     # TESTING: 43 differences. We're going to need to debug firstpass
-        #     # to see why datax, datay are experiencing differences.
+    #     # TESTING: Down to 11 differences!!
 
-        #     datax = floor.(Int, datax)
-        #     datay = floor.(Int, datay)
+        datax = floor.(Int, datax)
+        datay = floor.(Int, datay)
+        # writedlm("tests/juliaOut/1stpass_linnaninterp_datax.csv", datax, ',')
 
-        #     if i != total_passes - 1
-        #         X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
+        if i != total_passes - 1
+            X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
 
-        #         # STILL NEEDS TESTING, BUT IS NOT CRASHING AT LEAST
-        #         datax = regular_interp(datax, X, Y, XI, YI)
-        #         datay = regular_interp(datay, X, Y, XI, YI)
-        #     end
-        # end
+            # STILL NEEDS TESTING, BUT IS NOT CRASHING AT LEAST
+            datax = regular_interp(datax, X, Y, XI, YI)
+            datay = regular_interp(datay, X, Y, XI, YI)
+        end
+    end
 
-        # writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
-        # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
+    writedlm("tests/juliaOut/penultimate_datax.csv", datax, ',')
+    # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
 
-        println("Final Pass")
-        datax = readdlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", ',', Float64)
-        datay = readdlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", ',', Float64)
+    # println("Final Pass")
+    # datax = readdlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", ',', Float64)
+    # datay = readdlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", ',', Float64)
 
-        x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
+    # x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
 
 
     # Dummy values
@@ -200,7 +201,8 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 else
                     subset = R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
                                 Int(floor(.5*M+2)):Int(floor(1.5*M-3))]
-                    max = maximum(R)
+                    # max = maximum(R)
+                    max = maximum(subset)
                     max_coords = findall(x -> x == max, subset)
                     max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
                 end
@@ -347,35 +349,44 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 else
                     subset = R[Int(floor(.5 * N + 2)):Int(floor(1.5 * N - 3)), 
                                 Int(floor(.5 * M + 2)):Int(floor(1.5 * M - 3))]
-                    max = maximum(R)
+                    # max = maximum(R)
+                    max = maximum(subset)
                     max_coords = findall(x -> x == max, subset)
                     max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
                 end
+
+                if length(max_coords) == 0
+                    @show max max_coords
+                end
+
 
                 # Handle a vector that has multiple maximum coordinates.
                 # Sum the product of each x and y indice with its own indice within
                 # the max_coords vector.
                 if length(max_coords) > 1
                     max_x1 = round(Int, 
-                            sum([c[2]^2 for (c, i) in enumerate(max_coords)]) /
+                            sum([c[2]^2 for (c, i) in enumerate(max_coords)]) ./
                             sum([c[2] for c in max_coords]))
                     max_y1 = round(Int, 
-                            sum([c[1]^2 for (c, i) in enumerate(max_coords)]) /
+                            sum([c[1]^2 for (c, i) in enumerate(max_coords)]) ./
                             sum([c[1] for c in max_coords]))
-
-                    if max_x1 == 1
-                        max_x1 = 2
-                    end
-                    if max_y1 == 1
-                        max_y1 = 2
-                    end
-                else
-                    # what the hey ho -- left off here, dange cartesian things
-                    max_x1, max_y1 = [(i,j) for (i,j) in Tuple.(CartesianIndices(max_coords))]
                 end
+                
+                # Unpack cartesian index type. Only a handful iterations here
+                if length(max_coords) == 1
+                    for (i, j) in max_coords
+                        max_y1 = i; max_x1 = j
+                    end
+                end
+                
+                # Some kind of manual adjustment?
+                # if max_x1 == 1
+                #     max_x1 = 2
+                # end
+                # if max_y1 == 1
+                #     max_y1 = 2
+                # end
 
-                
-                
 
 
 

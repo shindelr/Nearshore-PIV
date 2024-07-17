@@ -1,7 +1,7 @@
 using Plots, DelimitedFiles
 
-j_array = readdlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", ',', Float64)
-m_array = readdlm("tests/mlabOut/multipass_loop/penultimate_loop.csv", ',', Float64)
+j_array = readdlm("tests/juliaOut/penultimate_datax.csv", ',', Float64)
+m_array = readdlm("tests/mlabOut/penultimate_datax.csv", ',', Float64)
 unmodified_m_array = readdlm("tests/mlabOut/naninterp_testing/mtest_unmodifiedDATAX.csv", ',', Float64)
 
 
