@@ -768,17 +768,17 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     # teller = true
 
     U2 = nu .+ im .* nv
-    # Testing: U2 Looks okay, but might not be, it's hard to tell with im's. 
-    writedlm("tests/juliaOut/first_localfilt/U2.csv", U2, ',')
+    # Testing: Sucess! Matlab equivalency. 
+    # writedlm("tests/juliaOut/first_localfilt/U2.csv", U2, ',')
 
     ma, na = size(U2)
     histostd = zeros(ComplexF64, size(nu)) 
     histo = zeros(ComplexF64, size(nu))
-    hista = zeros(eltype(nu), size(nu)) 
-    histastd = zeros(eltype(nu), size(nu)) 
+    # hista = zeros(eltype(nu), size(nu)) 
+    # histastd = zeros(eltype(nu), size(nu)) 
 
     iter = ProgressBar(m - 1:na - m + 2)
-    for p in iter  # Looks gnar, but just a bar!
+    for _ in iter  # Looks gnar, but just a bar!
         for ii in m - 1:1:na - m + 2
             for jj in m - 1:1:ma - m + 2
 
@@ -805,8 +805,12 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
         set_description(iter, "Local $method filter running: ")
     end
 
-    # TESTING: Success!
-    # writedlm("tests/juliaOut/JtestHISTOSTD.csv", histostd, ',')
+    # TESTING: histostd matrices are equivalent to 11 decimal points, then matlab
+    #          rounds off and Julia continues on for a few more digits
+
+    # TESTING: histo matrices are off by 50 rows! I think this could be where
+    #           we're getting messed up. Needs more investigation.
+    writedlm("tests/juliaOut/first_localfilt/histo.csv", histo, ',')
     
     # Locate gridpoints w/higher value than the threshold
     coords = findall(
