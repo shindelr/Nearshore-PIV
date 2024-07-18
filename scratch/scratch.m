@@ -368,17 +368,19 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
   if nargin==5
       m=3; method='mnanmedian'; stat='median';
   end
+
   nu = zeros(size(u) + 2 * floor(m/2)) * nan;
   nv = zeros(size(u) + 2 * floor(m/2)) * nan;
   nu(floor(m/2) + 1:end - floor(m/2), floor(m/2) + 1:end - floor(m/2)) = u;
   nv(floor(m/2) + 1:end - floor(m/2), floor(m/2) + 1:end - floor(m/2)) = v;
-  
+
   INx=zeros(size(nu));
   INx(floor(m/2) + 1:end - floor(m/2), floor(m/2) + 1:end - floor(m/2)) = IN;
   
   prev = isnan(nu); 
   previndx = find(prev==1); 
   U2 = nu + i * nv;
+  writematrix(U2, "../tests/mlabOut/first_localfilt/U2.csv");
 
   teller = 1; 
   [ma, na] = size(U2); 
@@ -709,50 +711,50 @@ sensit = 3;
 % ------------------------------------------------------------------------------
 % function Multipassx technically
 % Loop disabled for testing
-for i=1:iter-1
-    disp(['iter ' num2str(i) ' of ' num2str(iter)]);
-
+% for i=1:iter-1
+%     disp(['iter ' num2str(i) ' of ' num2str(iter)]);
+    i = 1;
     [x,y,datax,datay] = firstpass(A, B, wins(i, :), overlap, datax, datay);
-    % validation
+%     % validation
     [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
-
-    [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
+    % writematrix(datax, "../tests/mlabOut/multipass_loop/localfilt_datax.csv");
+%     [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
     
-    datax=floor(datax);
-    datay=floor(datay);
+%     datax=floor(datax);
+%     datay=floor(datay);
 
-    % % expand the velocity data to twice the original size
-    if(i~=iter-1)
-      if wins(i,1)~=wins(i+1,1)
-        X=(1:((1-overlap)*2*wins(i+1,1)):sx-2*wins(i+1,1)+1) + wins(i+1,1);
-        XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
-      else
-        XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
-        X=XI;
-      end
-      if wins(i,2)~=wins(i+1,2)
-        Y=(1:((1-overlap)*2*wins(i+1,2)):sy-2*wins(i+1,2)+1) + wins(i+1,2);
-        YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
-      else
-        YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
-        Y=YI; 
-      end
+%     % % expand the velocity data to twice the original size
+%     if(i~=iter-1)
+%       if wins(i,1)~=wins(i+1,1)
+%         X=(1:((1-overlap)*2*wins(i+1,1)):sx-2*wins(i+1,1)+1) + wins(i+1,1);
+%         XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+%       else
+%         XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+%         X=XI;
+%       end
+%       if wins(i,2)~=wins(i+1,2)
+%         Y=(1:((1-overlap)*2*wins(i+1,2)):sy-2*wins(i+1,2)+1) + wins(i+1,2);
+%         YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+%       else
+%         YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+%         Y=YI; 
+%       end
 
-      datax=round(interp2(X, Y', datax, XI, YI'));
-      datay=round(interp2(X, Y', datay, XI, YI'));
+%       datax=round(interp2(X, Y', datax, XI, YI'));
+%       datay=round(interp2(X, Y', datay, XI, YI'));
 
-      [datax,datay]=naninterp(datax, datay, 'linear', [], ...
-                              repmat(XI, size(datax, 1), 1), ...
-                              repmat(YI', 1, size(datax, 2)) ...
-                              ); 
+%       [datax,datay]=naninterp(datax, datay, 'linear', [], ...
+%                               repmat(XI, size(datax, 1), 1), ...
+%                               repmat(YI', 1, size(datax, 2)) ...
+%                               ); 
       
-      datax=round(datax);
-      datay=round(datay);
+%       datax=round(datax);
+%       datay=round(datay);
       
 
-    end
-end
-% writematrix(datax, "../tests/mlabOut/penultimate_datax.csv");
+%     end
+% end
+
 
 % % % Final pass gives displacement to subpixel accuracy
 % disp('Final iteration')

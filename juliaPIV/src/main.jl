@@ -11,10 +11,6 @@ using Interpolations
 using ScatteredInterpolation
 using Plots
 
-# User defined modules
-include("./filtering.jl")
-using .PIVFilters: localfilt #linear_naninterp
-
 
 # PASS FUNCTIONS 
 """
@@ -48,14 +44,15 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = copy(datax)
-    for i in 1:total_passes - 1
-        println("Pass ", i, " of ", total_passes )
-    
+    # for i in 1:total_passes - 1
+        # println("Pass ", i, " of ", total_passes )
+    i = 1
     x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
     
 
     datax, datay = localfilt(x, y, datax, datay, sensit)
     # TESTING: Down to 10 differences!
+    writedlm("tests/juliaOut/multipass_loop/localfilt_datax.csv", datax, ',')
 
     #     # Not currently working on second iteration?
     #     # datax = naninterp(datax, i)
@@ -68,24 +65,24 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     #     # TESTING: 52 differences with Polyharmonic() -- weird blob in top left
 
     #     # OG MATLAB IMPLEMENTATION
-        datax, datay = linear_naninterp(datax, datay)
+        # datax, datay = linear_naninterp(datax, datay)
 
     #     # TESTING: Down to 11 differences!!
 
-        datax = floor.(Int, datax)
-        datay = floor.(Int, datay)
+        # datax = floor.(Int, datax)
+        # datay = floor.(Int, datay)
         # writedlm("tests/juliaOut/1stpass_linnaninterp_datax.csv", datax, ',')
 
-        if i != total_passes - 1
-            X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
+        # if i != total_passes - 1
+            # X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
 
             # STILL NEEDS TESTING, BUT IS NOT CRASHING AT LEAST
-            datax = regular_interp(datax, X, Y, XI, YI)
-            datay = regular_interp(datay, X, Y, XI, YI)
-        end
-    end
+            # datax = regular_interp(datax, X, Y, XI, YI)
+            # datay = regular_interp(datay, X, Y, XI, YI)
+        # end
+    # end
 
-    writedlm("tests/juliaOut/penultimate_datax.csv", datax, ',')
+    # writedlm("tests/juliaOut/penultimate_datax.csv", datax, ',')
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
 
     # println("Final Pass")
@@ -252,6 +249,7 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
     return xx, yy, datax, datay
 end
 
+# HALFWAY FINISHED
 """
 ### finalpass
     TODO: Write me.
@@ -710,6 +708,178 @@ function build_grids(wins, overlap, sx, sy, i)
         end
 
     return X, Y, XI, YI
+end
+
+"""
+### localfilt
+    Filter out vectors that deviate from the median or the mean of their \
+    surrounding neighbors by the factor `threshold` times the standard \
+    deviation of the neighbors.\n
+    Parameters:
+    -----------
+    - x, y, u, v : `Matrices`
+    - threshold : `Int`
+        Specifies the point at which a vector has deviated too 
+        far from the specified statistical mean or median.
+    - median_bool: `Bool`
+        If true, specifies that the median should be the turning
+        point for the data to be filtered out on. Defaults
+        to true. If specified as false, the mean value will be 
+        used instead.
+        method.
+    - m : `Int`
+        Defines the number of vectors contributing to the median 
+        or mean value of each vector. Defaults to 3, though the
+        original implementation mentions that 5 is a good number
+        too. Also known as "kernelsize"
+    - mask : `Matrix`
+        Use to mask out areas of the given matrices to improve
+        computation times. Default to an empty matrix.
+    Returns:
+    --------
+    - hu, hv : `Matrices`
+            Successfully filtered matrices. New versions of u
+            and v.
+"""
+function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
+    method =  median_bool ? "median" : "mean"
+    IN = zeros(eltype(u), size(u))
+    # !!!! Should handle mask being a file here !!!! #
+
+    dim1 = round(Int, size(u, 1) + 2 * floor(m/2))
+    dim2 = round(Int, size(u, 2) + 2 * floor(m/2))
+    nu = zeros(eltype(u), (dim1, dim2)) * NaN
+    nv = zeros(eltype(u), (dim1, dim2)) * NaN
+    
+    # Transfer over data
+    from_cols = round(Int, floor(m/2) + 1)
+    minus_rows = round(Int, floor(m/2))
+    nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
+    nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
+    # TESTING: Success! NV/NU are both equivalent to matlab
+    
+    INx = zeros(eltype(nu), size(nu))
+    INx[from_cols: end - minus_rows, from_cols: end - minus_rows] = IN
+    # Testing: Success! INx equivalent to matlab
+    
+    # Could be a little problem area here. Not sure any of these vars are used.
+    # prev = isnan.(nu)
+    # previndex = findall(prev)
+    # teller = true
+
+    U2 = nu .+ im .* nv
+    # Testing: U2 Looks okay, but might not be, it's hard to tell with im's. 
+    writedlm("tests/juliaOut/first_localfilt/U2.csv", U2, ',')
+
+    ma, na = size(U2)
+    histostd = zeros(ComplexF64, size(nu)) 
+    histo = zeros(ComplexF64, size(nu))
+    hista = zeros(eltype(nu), size(nu)) 
+    histastd = zeros(eltype(nu), size(nu)) 
+
+    iter = ProgressBar(m - 1:na - m + 2)
+    for p in iter  # Looks gnar, but just a bar!
+        for ii in m - 1:1:na - m + 2
+            for jj in m - 1:1:ma - m + 2
+
+                if INx[jj, ii] != 1
+                    m_floor_two = floor(Int, m / 2)
+                    tmp = U2[round(Int, jj - m_floor_two): round(Int, jj + m_floor_two),
+                            round(Int, ii - m_floor_two): round(Int, ii + m_floor_two)] 
+                    tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
+
+                    # Create a collection of all elements without NaN values
+                    usum_prep = collect(Skipper.skip(x -> isnan(x), tmp[:]))
+                    
+                    # !!!!!!!! NEEDS TESTING STILL !!!!!!!! #
+                    # Run the appropriate stat depending on method arg.
+                    usum = median_bool ? im_median(usum_prep) : mean(usum_prep)
+                    histostd[jj, ii] = im_std(usum_prep)
+
+                else
+                    usum = tmp = histostd[jj, ii] = NaN
+                end
+                histo[jj, ii] = usum
+            end
+        end 
+        set_description(iter, "Local $method filter running: ")
+    end
+
+    # TESTING: Success!
+    # writedlm("tests/juliaOut/JtestHISTOSTD.csv", histostd, ',')
+    
+    # Locate gridpoints w/higher value than the threshold
+    coords = findall(
+        (real(U2) .> real(histo) .+ threshold .* real(histostd)) .|
+        (imag(U2) .> imag(histo) .+ threshold .* imag(histostd)) .|
+        (real(U2) .< real(histo) .- threshold .* real(histostd)) .|
+        (imag(U2) .< imag(histo) .- threshold .* imag(histostd)))
+    
+    # Then "filter" those points out by changing them to NaN!
+    for jj in eachindex(coords)
+        nu[coords[jj]] = NaN
+        nv[coords[jj]] = NaN
+    end
+
+    # TESTING: Showing 13 differences, nu & nv are directly related to datax
+    #  and datay. So maybe this problem stems from firstpass()
+
+    # writedlm("tests/juliaOut/JtestNUFilt.csv", nu, ',')
+    # writedlm("tests/juliaOut/JtestNVFilt.csv", nv, ',')
+
+    # Skipped print statement about how many vectors were filtered.
+    # Skpped checking for 'interp' arg, because the actual program wasn't using
+    # it. We call naninterp explicitly right after this function.
+
+    m_ceil_two = ceil(Int, m/2)
+    m_floor_two = floor(Int, m/2)
+    hu = nu[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
+    hv = nv[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
+    return hu, hv
+end
+
+
+# COMPLEX NUMBER STATISTICS
+"""
+### im_median
+    Find the median of the argued collection of complex numbers.
+    If the collection is empty, returns NaN.
+"""
+function im_median(collection)
+    if length(collection) < 1
+        return NaN
+    end
+    real_part = median(real.(collection))
+    im_part = median(imag.(collection))
+    return real_part + im_part * im
+end
+
+"""
+### im_mean
+    Find the mean of the argued collection of complex numbers.
+    If the collection is empty, returns NaN.
+"""
+function im_mean(collection)
+    if length(collection) < 1
+        return NaN
+    end
+    real_part = mean(real.(collection))
+    im_part = mean(imag.(collection))
+    return real_part + im_part * im
+end
+
+"""
+### im_median
+    Find the std dev of the argued collection of complex numbers.
+    If the collection is empty, returns NaN.
+"""
+function im_std(collection)
+    if length(collection) < 1
+        return NaN
+    end
+    real_part = std(real(collection), corrected=false)
+    im_part = std(imag(collection), corrected=false)
+    return real_part + im_part * im
 end
 
 
