@@ -414,7 +414,9 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
           % v1=imag(usum).^2 - imag(U2(jj,ii)).^2;
           
           % histo(jj,ii)=u1+i*v1;
+
           histo(jj,ii)=usum;
+          
           % histostd(jj,ii)=mnanstd(real(tmp(:))) + i*mnanstd(imag(tmp(:)));
           
           % th1=angle(usum); th2=angle(U2(jj,ii));
@@ -426,7 +428,7 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
       end
       fprintf('.')
   end
-  writematrix(histo, "../tests/mlabOut/first_localfilt/histo.csv");
+  % writematrix(histo, "../tests/mlabOut/first_localfilt/histo.csv");
 
 
   %%%%%%%% Locate gridpoints with a higher value than the threshold 
@@ -449,9 +451,8 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
       % exceeds our threshold.
       nu(cy(jj),cx(jj))=NaN;  nv(cy(jj),cx(jj))=NaN;
   end
-  % writematrix(nu, "../tests/mlabOut/mtestNUFILT.csv");
-  % writematrix(nv, "../tests/mlabOut/mtestNVFILT.csv");
-
+  writematrix(nu, "../tests/mlabOut/first_localfilt/nu.csv");
+  writematrix(nv, "../tests/mlabOut/first_localfilt/nv.csv");
 
   rest=length(cy);
 

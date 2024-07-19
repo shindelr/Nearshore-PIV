@@ -48,10 +48,10 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
         # println("Pass ", i, " of ", total_passes )
     i = 1
     x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
-    
+    # TESTING 07/17: Success! First iteration is a perfect match!
 
     datax, datay = localfilt(x, y, datax, datay, sensit)
-    # TESTING: Down to 10 differences!
+    # TESTING 07/18: Down to 10 differences!
     writedlm("tests/juliaOut/multipass_loop/localfilt_datax.csv", datax, ',')
 
     #     # Not currently working on second iteration?
@@ -744,7 +744,6 @@ end
 function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     method =  median_bool ? "median" : "mean"
     IN = zeros(eltype(u), size(u))
-    # !!!! Should handle mask being a file here !!!! #
 
     dim1 = round(Int, size(u, 1) + 2 * floor(m/2))
     dim2 = round(Int, size(u, 2) + 2 * floor(m/2))
@@ -756,24 +755,26 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     minus_rows = round(Int, floor(m/2))
     nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
     nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
-    # TESTING: Success! NV/NU are both equivalent to matlab
+    # TESTING 07/28: Success! NV/NU are both equivalent to matlab
     
     INx = zeros(eltype(nu), size(nu))
     INx[from_cols: end - minus_rows, from_cols: end - minus_rows] = IN
-    # Testing: Success! INx equivalent to matlab
+    # Testing 07/28: Success! INx equivalent to matlab
     
-    # Could be a little problem area here. Not sure any of these vars are used.
+    # Not sure any of these vars are used.
     # prev = isnan.(nu)
     # previndex = findall(prev)
     # teller = true
 
     U2 = nu .+ im .* nv
-    # Testing: Sucess! Matlab equivalency. 
+    # Testing 07/28: Sucess! Matlab equivalency. 
     # writedlm("tests/juliaOut/first_localfilt/U2.csv", U2, ',')
 
     ma, na = size(U2)
     histostd = zeros(ComplexF64, size(nu)) 
     histo = zeros(ComplexF64, size(nu))
+
+    # Not sure these two are used either
     # hista = zeros(eltype(nu), size(nu)) 
     # histastd = zeros(eltype(nu), size(nu)) 
 
@@ -784,20 +785,19 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
 
                 if INx[jj, ii] != 1
                     m_floor_two = floor(Int, m / 2)
-                    tmp = U2[round(Int, jj - m_floor_two): round(Int, jj + m_floor_two),
-                            round(Int, ii - m_floor_two): round(Int, ii + m_floor_two)] 
+                    tmp = U2[jj - m_floor_two: jj + m_floor_two,
+                            ii - m_floor_two: ii + m_floor_two] 
                     tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
 
                     # Create a collection of all elements without NaN values
                     usum_prep = collect(Skipper.skip(x -> isnan(x), tmp[:]))
-                    
-                    # !!!!!!!! NEEDS TESTING STILL !!!!!!!! #
+
                     # Run the appropriate stat depending on method arg.
-                    usum = median_bool ? im_median(usum_prep) : mean(usum_prep)
+                    usum = median_bool ? im_median(tmp[:]) : mean(tmp[:])
                     histostd[jj, ii] = im_std(usum_prep)
 
                 else
-                    usum = tmp = histostd[jj, ii] = NaN
+                    usum = NaN; tmp = NaN; histostd[jj, ii] = NaN
                 end
                 histo[jj, ii] = usum
             end
@@ -805,11 +805,12 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
         set_description(iter, "Local $method filter running: ")
     end
 
-    # TESTING: histostd matrices are equivalent to 11 decimal points, then matlab
-    #          rounds off and Julia continues on for a few more digits
+    # TESTING 07/08: histostd matrices are equivalent to 11 decimal points, then 
+    #          matlab rounds off and Julia continues on for a few more digits
+    writedlm("tests/juliaOut/first_localfilt/histostd.csv", histostd, ',')
 
-    # TESTING: histo matrices are off by 50 rows! I think this could be where
-    #           we're getting messed up. Needs more investigation.
+    # TESTING 07/08: histo matrices are off by 50 rows! I think this could be
+    #           where we're getting messed up. Needs more investigation.
     writedlm("tests/juliaOut/first_localfilt/histo.csv", histo, ',')
     
     # Locate gridpoints w/higher value than the threshold
@@ -828,8 +829,8 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     # TESTING: Showing 13 differences, nu & nv are directly related to datax
     #  and datay. So maybe this problem stems from firstpass()
 
-    # writedlm("tests/juliaOut/JtestNUFilt.csv", nu, ',')
-    # writedlm("tests/juliaOut/JtestNVFilt.csv", nv, ',')
+    writedlm("tests/juliaOut/first_localfilt/nu.csv", nu, ',')
+    writedlm("tests/juliaOut/first_localfilt/nv.csv", nv, ',')
 
     # Skipped print statement about how many vectors were filtered.
     # Skpped checking for 'interp' arg, because the actual program wasn't using
@@ -850,12 +851,16 @@ end
     If the collection is empty, returns NaN.
 """
 function im_median(collection)
-    if length(collection) < 1
-        return NaN
+    i = filter(x -> !isnan(x), collection)
+
+    if length(i) > 0
+        real_part = median(real(i))
+        im_part = median(imag(i))
+        return real_part + im_part * im
     end
-    real_part = median(real.(collection))
-    im_part = median(imag.(collection))
-    return real_part + im_part * im
+
+    # If all NaN
+    return NaN
 end
 
 """
