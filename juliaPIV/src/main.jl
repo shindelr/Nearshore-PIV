@@ -789,12 +789,10 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
                             ii - m_floor_two: ii + m_floor_two] 
                     tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
 
-                    # Create a collection of all elements without NaN values
-                    usum_prep = collect(Skipper.skip(x -> isnan(x), tmp[:]))
-
                     # Run the appropriate stat depending on method arg.
-                    usum = median_bool ? im_median(tmp[:]) : mean(tmp[:])
-                    histostd[jj, ii] = im_std(usum_prep)
+                    # usum = median_bool ? im_median(tmp[:]) : mean(tmp[:])
+                    usum = median_magnitude(tmp[:])
+                    histostd[jj, ii] = im_std(tmp[:])
 
                 else
                     usum = NaN; tmp = NaN; histostd[jj, ii] = NaN
@@ -807,7 +805,7 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
 
     # TESTING 07/08: histostd matrices are equivalent to 11 decimal points, then 
     #          matlab rounds off and Julia continues on for a few more digits
-    writedlm("tests/juliaOut/first_localfilt/histostd.csv", histostd, ',')
+    # writedlm("tests/juliaOut/first_localfilt/histostd.csv", histostd, ',')
 
     # TESTING 07/08: histo matrices are off by 50 rows! I think this could be
     #           where we're getting messed up. Needs more investigation.
@@ -829,8 +827,8 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     # TESTING: Showing 13 differences, nu & nv are directly related to datax
     #  and datay. So maybe this problem stems from firstpass()
 
-    writedlm("tests/juliaOut/first_localfilt/nu.csv", nu, ',')
-    writedlm("tests/juliaOut/first_localfilt/nv.csv", nv, ',')
+    # writedlm("tests/juliaOut/first_localfilt/nu.csv", nu, ',')
+    # writedlm("tests/juliaOut/first_localfilt/nv.csv", nv, ',')
 
     # Skipped print statement about how many vectors were filtered.
     # Skpped checking for 'interp' arg, because the actual program wasn't using
@@ -878,17 +876,21 @@ function im_mean(collection)
 end
 
 """
-### im_median
+### im_std
     Find the std dev of the argued collection of complex numbers.
     If the collection is empty, returns NaN.
 """
 function im_std(collection)
-    if length(collection) < 1
-        return NaN
+    i = filter(x -> !isnan(x), collection)
+
+    if length(i) > 0
+        real_part = std(real(i), corrected=false)
+        im_part = std(imag(i), corrected=false)
+        return real_part + im_part * im
     end
-    real_part = std(real(collection), corrected=false)
-    im_part = std(imag(collection), corrected=false)
-    return real_part + im_part * im
+    
+    # All NaN!
+    return NaN
 end
 
 
