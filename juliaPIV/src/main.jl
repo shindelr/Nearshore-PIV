@@ -44,51 +44,49 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = copy(datax)
-    # for i in 1:total_passes - 1
-        # println("Pass ", i, " of ", total_passes )
-    i = 1
+    for i in 1:total_passes - 1
+        println("Pass ", i, " of ", total_passes )
+    # i = 1
+    
     x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
     # TESTING 07/17: Success! First iteration is a perfect match!
+    filename = "firstpass_datax$i.csv"
+    path = "tests/juliaOut/multipass_loop/$filename.csv"
+    writedlm(path, datax, ',')
 
     datax, datay = localfilt(x, y, datax, datay, sensit)
     # TESTING 07/18: Down to 10 differences!
-    writedlm("tests/juliaOut/multipass_loop/localfilt_datax.csv", datax, ',')
+    # writedlm("tests/juliaOut/multipass_loop/localfilt_datax.csv", datax, ',')
 
-    #     # Not currently working on second iteration?
-    #     # datax = naninterp(datax, i)
-    #     # datay = naninterp(datay, i)
-    #     # TESTING: 60 differences with Multiquadratic() -- Interesting blobs in top zone
-    #     # TESTING: 53 differences with InverseMultiquadratic() -- Might be best balance between top zone and center
-    #     # TESTING: 53 differences with Gaussian() -- BAD
-    #     # TESTING: 43 difference with linear_naninterp() -- Closest to MATLAB
-    #     # TESTING: 50 differences with InverseQuadratic() -- Much more uniform extrapolation into the top but more spotty in the center
-    #     # TESTING: 52 differences with Polyharmonic() -- weird blob in top left
+        # Not currently working on second iteration?
+        # datax = naninterp(datax, i)
+        # datay = naninterp(datay, i)
+        # TESTING: 60 differences with Multiquadratic() -- Interesting blobs in top zone
+        # TESTING: 53 differences with InverseMultiquadratic() -- Might be best balance between top zone and center
+        # TESTING: 53 differences with Gaussian() -- BAD
+        # TESTING: 43 difference with linear_naninterp() -- Closest to MATLAB
+        # TESTING: 50 differences with InverseQuadratic() -- Much more uniform extrapolation into the top but more spotty in the center
+        # TESTING: 52 differences with Polyharmonic() -- weird blob in top left
 
-    #     # OG MATLAB IMPLEMENTATION
-        # datax, datay = linear_naninterp(datax, datay)
+        # OG MATLAB IMPLEMENTATION
+        datax, datay = linear_naninterp(datax, datay)
+        # TESTING: Down to 11 differences!!
 
-    #     # TESTING: Down to 11 differences!!
-
-        # datax = floor.(Int, datax)
-        # datay = floor.(Int, datay)
+        datax = floor.(Int, datax)
+        datay = floor.(Int, datay)
         # writedlm("tests/juliaOut/1stpass_linnaninterp_datax.csv", datax, ',')
 
-        # if i != total_passes - 1
-            # X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
-
-            # STILL NEEDS TESTING, BUT IS NOT CRASHING AT LEAST
-            # datax = regular_interp(datax, X, Y, XI, YI)
-            # datay = regular_interp(datay, X, Y, XI, YI)
-        # end
-    # end
+        if i != total_passes - 1
+            X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
+            datax = regular_interp(datax, X, Y, XI, YI)
+            datay = regular_interp(datay, X, Y, XI, YI)
+        end
+    end
 
     # writedlm("tests/juliaOut/penultimate_datax.csv", datax, ',')
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
 
     # println("Final Pass")
-    # datax = readdlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", ',', Float64)
-    # datay = readdlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", ',', Float64)
-
     # x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
 
 
@@ -742,7 +740,6 @@ end
             and v.
 """
 function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
-    method =  median_bool ? "median" : "mean"
     IN = zeros(eltype(u), size(u))
 
     dim1 = round(Int, size(u, 1) + 2 * floor(m/2))
@@ -755,61 +752,48 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     minus_rows = round(Int, floor(m/2))
     nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
     nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
-    # TESTING 07/28: Success! NV/NU are both equivalent to matlab
+    # TESTING 07/18: Success! NV/NU are both equivalent to matlab
     
     INx = zeros(eltype(nu), size(nu))
     INx[from_cols: end - minus_rows, from_cols: end - minus_rows] = IN
-    # Testing 07/28: Success! INx equivalent to matlab
+    # Testing 07/18: Success! INx equivalent to matlab
     
-    # Not sure any of these vars are used.
-    # prev = isnan.(nu)
-    # previndex = findall(prev)
-    # teller = true
-
     U2 = nu .+ im .* nv
-    # Testing 07/28: Sucess! Matlab equivalency. 
+    # Testing 07/18: Sucess! Matlab equivalency. 
     # writedlm("tests/juliaOut/first_localfilt/U2.csv", U2, ',')
 
     ma, na = size(U2)
     histostd = zeros(ComplexF64, size(nu)) 
     histo = zeros(ComplexF64, size(nu))
 
-    # Not sure these two are used either
-    # hista = zeros(eltype(nu), size(nu)) 
-    # histastd = zeros(eltype(nu), size(nu)) 
+    for ii in m - 1:1:na - m + 2
+        for jj in m - 1:1:ma - m + 2
 
-    iter = ProgressBar(m - 1:na - m + 2)
-    for _ in iter  # Looks gnar, but just a bar!
-        for ii in m - 1:1:na - m + 2
-            for jj in m - 1:1:ma - m + 2
+            if INx[jj, ii] != 1
+                m_floor_two = floor(Int, m / 2)
+                tmp = U2[jj - m_floor_two: jj + m_floor_two,
+                        ii - m_floor_two: ii + m_floor_two] 
+                tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
 
-                if INx[jj, ii] != 1
-                    m_floor_two = floor(Int, m / 2)
-                    tmp = U2[jj - m_floor_two: jj + m_floor_two,
-                            ii - m_floor_two: ii + m_floor_two] 
-                    tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
+                # Run the appropriate stat depending on method arg.
+                usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
+                histostd[jj, ii] = im_std(tmp[:])
 
-                    # Run the appropriate stat depending on method arg.
-                    # usum = median_bool ? im_median(tmp[:]) : mean(tmp[:])
-                    usum = median_magnitude(tmp[:])
-                    histostd[jj, ii] = im_std(tmp[:])
-
-                else
-                    usum = NaN; tmp = NaN; histostd[jj, ii] = NaN
-                end
-                histo[jj, ii] = usum
+            else
+                usum = NaN; tmp = NaN; histostd[jj, ii] = NaN
             end
-        end 
-        set_description(iter, "Local $method filter running: ")
-    end
+            histo[jj, ii] = usum
+        end
+    end 
 
-    # TESTING 07/08: histostd matrices are equivalent to 11 decimal points, then 
+    # TESTING 07/18: histostd matrices are equivalent to 11 decimal points, then 
     #          matlab rounds off and Julia continues on for a few more digits
     # writedlm("tests/juliaOut/first_localfilt/histostd.csv", histostd, ',')
 
-    # TESTING 07/08: histo matrices are off by 50 rows! I think this could be
-    #           where we're getting messed up. Needs more investigation.
-    writedlm("tests/juliaOut/first_localfilt/histo.csv", histo, ',')
+    # TESTING 07/23: histo matrix still off by 49 rows! Though nu/nv errors
+    #               are down to just four. But I think it's related to the way 
+    #               we're handling median values.
+    # writedlm("tests/juliaOut/first_localfilt/histo.csv", histo, ',')
     
     # Locate gridpoints w/higher value than the threshold
     coords = findall(
@@ -824,8 +808,9 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
         nv[coords[jj]] = NaN
     end
 
-    # TESTING: Showing 13 differences, nu & nv are directly related to datax
-    #  and datay. So maybe this problem stems from firstpass()
+    # TESTING: Down to just 4 different values in both nu/nv. Higher quality
+    #          median function is helped a lot. Though that function is still
+    #          getting some incorrect results. See testing above. 7/23
 
     # writedlm("tests/juliaOut/first_localfilt/nu.csv", nu, ',')
     # writedlm("tests/juliaOut/first_localfilt/nv.csv", nv, ',')
@@ -838,6 +823,12 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     m_floor_two = floor(Int, m/2)
     hu = nu[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
     hv = nv[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
+
+    # TESTING: Ending the function with 10 differences in each hu/hv. Probably
+    #          related to the median function. 7/23
+    # writedlm("tests/juliaOut/first_localfilt/hu.csv", hu, ',')
+    # writedlm("tests/juliaOut/first_localfilt/hv.csv", hv, ',')
+
     return hu, hv
 end
 
@@ -859,6 +850,17 @@ function im_median(collection)
 
     # If all NaN
     return NaN
+end
+
+function im_median_magnitude(collection)
+    i = filter(x -> !isnan(x), collection)
+    isempty(i) && return NaN
+
+    sort!(i; by=abs)
+    n = length(i)
+    no2 = n ÷ 2
+    isodd(n) && return i[no2 + 1]
+    return (i[no2] + i[no2+1]) / 2
 end
 
 """
