@@ -11,7 +11,6 @@ using Interpolations
 using ScatteredInterpolation
 using Plots
 
-
 # PASS FUNCTIONS 
 """
 ### multipassx
@@ -44,15 +43,12 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = copy(datax)
-    for i in 1:total_passes - 1
-        println("Pass ", i, " of ", total_passes )
-    # i = 1
+    # for i in 1:total_passes - 1
+        # println("Pass ", i, " of ", total_passes )
+    i = 1
     
     x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
     # TESTING 07/17: Success! First iteration is a perfect match!
-    filename = "firstpass_datax$i.csv"
-    path = "tests/juliaOut/multipass_loop/$filename.csv"
-    writedlm(path, datax, ',')
 
     datax, datay = localfilt(x, y, datax, datay, sensit)
     # TESTING 07/18: Down to 10 differences!
@@ -68,20 +64,20 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
         # TESTING: 50 differences with InverseQuadratic() -- Much more uniform extrapolation into the top but more spotty in the center
         # TESTING: 52 differences with Polyharmonic() -- weird blob in top left
 
-        # OG MATLAB IMPLEMENTATION
-        datax, datay = linear_naninterp(datax, datay)
-        # TESTING: Down to 11 differences!!
+    #     # OG MATLAB IMPLEMENTATION
+    #     datax, datay = linear_naninterp(datax, datay)
+    #     # TESTING: Down to 11 differences!!
 
-        datax = floor.(Int, datax)
-        datay = floor.(Int, datay)
-        # writedlm("tests/juliaOut/1stpass_linnaninterp_datax.csv", datax, ',')
+    #     datax = floor.(Int, datax)
+    #     datay = floor.(Int, datay)
+    #     # writedlm("tests/juliaOut/1stpass_linnaninterp_datax.csv", datax, ',')
 
-        if i != total_passes - 1
-            X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
-            datax = regular_interp(datax, X, Y, XI, YI)
-            datay = regular_interp(datay, X, Y, XI, YI)
-        end
-    end
+    #     if i != total_passes - 1
+    #         X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
+    #         datax = regular_interp(datax, X, Y, XI, YI)
+    #         datay = regular_interp(datay, X, Y, XI, YI)
+    #     end
+    # end
 
     # writedlm("tests/juliaOut/penultimate_datax.csv", datax, ',')
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
@@ -775,6 +771,13 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
                         ii - m_floor_two: ii + m_floor_two] 
                 tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
 
+                path = "tests/juliaOut/first_localfilt/tmp.csv"
+                open(path, "a") do io
+                    write(io, "Iter: jj:$jj, ii:$ii\n")
+                    writedlm(io, tmp)
+                    # write(io, "\n")
+                end    
+                
                 # Run the appropriate stat depending on method arg.
                 usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
                 histostd[jj, ii] = im_std(tmp[:])
@@ -783,6 +786,10 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
                 usum = NaN; tmp = NaN; histostd[jj, ii] = NaN
             end
             histo[jj, ii] = usum
+            path = "tests/juliaOut/first_localfilt/tmp.csv"
+            open(path, "a") do io
+                write(io, "Histo[$jj, $ii] = $usum\n\n")
+            end    
         end
     end 
 
@@ -852,15 +859,18 @@ function im_median(collection)
     return NaN
 end
 
-function im_median_magnitude(collection)
+"""
+## im_median_magnitude
+    Take the median of a collection of complex numbers using the absolute magnitude.
+    This great function was created by the Julia Community, specifically:
+    @PeterSimmon & @mbauman
+"""
+function im_median_magnitude(collection::AbstractArray{Complex{T}}) where {T}
     i = filter(x -> !isnan(x), collection)
     isempty(i) && return NaN
-
-    sort!(i; by=abs)
     n = length(i)
-    no2 = n ÷ 2
-    isodd(n) && return i[no2 + 1]
-    return (i[no2] + i[no2+1]) / 2
+    v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=abs2)
+    return sum(v)/length(v)
 end
 
 """

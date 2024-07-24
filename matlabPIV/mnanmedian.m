@@ -16,3 +16,13 @@ if any(i)
 else
   y = NaN;
 end
+
+% Robin's code: 
+end
+
+test_m = [
+  1.0 + 0.0i	1.0 + 0.0i	1.0 + 0.0i;
+  1.0 + 0.0i	NaN + 0.0i	0.0 + 0.0i;
+  0.0 + 0.0i	0.0 + 0.0i	0.0 + 0.0i
+];
+m_nanmedian(test_m(:))
