@@ -23,21 +23,36 @@ function im_median_magnitude(collection::AbstractArray{Complex{T}}) where {T}
     i = filter(x -> !isnan(x), collection)
     isempty(i) && return NaN
     n = length(i)
-    v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=abs2)
+
+    # sort!(i, by=abs2)
+    sort!(i, by= x->(imag(x), real(x)))
+    no2 = n ÷ 2
+    isodd(n) && return i[no2+1]
+    return (i[no2] + i[no2+1]) / 2
+
+    # v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=abs2)
+    # v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=x->(real(x), imag(x)))
+
     return sum(v)/length(v)
 end
 
-nan_matrix = [
-    0.5488135 + 0.71518937im  NaN 0.42365480 + 0.64589411im;
-    0.43758721 + 0.89177300im  0.96366276 + 0.38344152im  NaN;
-    0.56804456 + 0.92559664im  NaN 0.02021840 + 0.83261985im
-]
+# test_m = [
+#     0.0 + 0.0im	0.0 + 0.0im	0.0 + 0.0im;
+#     2.0 + 0.0im	NaN + 0.0im	0.0 + 0.0im;
+#     2.0 + 1.0im	2.0 + 1.0im	0.0 + 0.0im
+# ]
 
+# test_m = [
+#     NaN + NaN*im	NaN + NaN*im	NaN + NaN*im;
+#     1.0 + 0.0im	NaN + 0.0im	2.0 + 0.0im;
+#     1.0 + 0.0im	1.0 + 1.0im	2.0 + 1.0im
+# ]
+
+# jj:6 ii:9
 test_m = [
-    1.0 + 0.0im	1.0 + 0.0im	1.0 + 0.0im;
-    1.0 + 0.0im	NaN + 0.0im	0.0 + 0.0im;
-    0.0 + 0.0im	0.0 + 0.0im	0.0 + 0.0im
+    0.0 + 0.0im	0.0 + 1.0im	1.0 + 1.0im;
+    0.0 + 0.0im	NaN + 0.0im	1.0 + 0.0im;
+    0.0 + 0.0im	1.0 + 0.0im	1.0 + 0.0im
 ]
-
 
 im_median_magnitude(test_m[:])
