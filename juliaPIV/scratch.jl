@@ -24,14 +24,13 @@ function im_median_magnitude(collection::AbstractArray{Complex{T}}) where {T}
     isempty(i) && return NaN
     n = length(i)
 
-    # sort!(i, by=abs2)
-    sort!(i, by= x->(imag(x), real(x)))
-    no2 = n ÷ 2
-    isodd(n) && return i[no2+1]
-    return (i[no2] + i[no2+1]) / 2
+    # sort!(i, by = x -> (abs2(x), angle(x)))
+    # no2 = n ÷ 2
+    # isodd(n) && return i[no2+1]
+    # return (i[no2] + i[no2+1]) / 2
 
     # v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=abs2)
-    # v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=x->(real(x), imag(x)))
+    v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=x -> (abs2(x), angle(x)))
 
     return sum(v)/length(v)
 end
@@ -49,10 +48,35 @@ end
 # ]
 
 # jj:6 ii:9
+# test_m = [
+#     0.0 + 0.0im	0.0 + 1.0im	1.0 + 1.0im;
+#     0.0 + 0.0im	NaN + 0.0im	1.0 + 0.0im;
+#     0.0 + 0.0im	1.0 + 0.0im	1.0 + 0.0im
+# ]
+
+# Iter: jj:10, ii:3
+# test_m = [
+#     1.0 + 1.0im	1.0 + 1.0im	1.0 + 0.0im;
+#     0.0 + 1.0im	NaN + 0.0im	0.0 + 0.0im;
+#     0.0 + 1.0im	0.0 + 0.0im	0.0 + 0.0im
+# ]
+# Histo[10, 3] = 0.0 + 1.0im
+
+# Iter: jj:21, ii:3
+# test_m = [
+#     1.0 + 0.0im	2.0 + 0.0im	1.0 + 0.0im;
+#     1.0 + 1.0im	NaN + 0.0im	3.0 + 0.0im;
+#     1.0 + 1.0im	2.0 + 0.0im	3.0 + 0.0im
+# ]
+# # Histo[21, 3] = 2.5 + 0.0im
+
+# Iter: jj:39, ii:2
 test_m = [
-    0.0 + 0.0im	0.0 + 1.0im	1.0 + 1.0im;
-    0.0 + 0.0im	NaN + 0.0im	1.0 + 0.0im;
-    0.0 + 0.0im	1.0 + 0.0im	1.0 + 0.0im
+    NaN + NaN*im	4.0 + 2.0im	5.0 + 0.0im;
+    NaN + NaN*im	NaN + 0.0im	4.0 + 3.0im;
+    NaN + NaN*im	4.0 + 3.0im	5.0 + 3.0im
 ]
+# Histo[39, 2] = 5.0 + 0.0im
+
 
 im_median_magnitude(test_m[:])

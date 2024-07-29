@@ -771,13 +771,6 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
                         ii - m_floor_two: ii + m_floor_two] 
                 tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
 
-                # path = "tests/juliaOut/first_localfilt/tmp.csv"
-                # open(path, "a") do io
-                #     write(io, "Iter: jj:$jj, ii:$ii\n")
-                #     writedlm(io, tmp)
-                #     # write(io, "\n")
-                # end    
-                
                 # Run the appropriate stat depending on method arg.
                 usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
                 histostd[jj, ii] = im_std(tmp[:])
@@ -786,10 +779,6 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
                 usum = NaN; tmp = NaN; histostd[jj, ii] = NaN
             end
             histo[jj, ii] = usum
-            # path = "tests/juliaOut/first_localfilt/tmp.csv"
-            # open(path, "a") do io
-            #     write(io, "Histo[$jj, $ii] = $usum\n\n")
-            # end    
         end
     end 
 
@@ -797,9 +786,7 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     #          matlab rounds off and Julia continues on for a few more digits
     # writedlm("tests/juliaOut/first_localfilt/histostd.csv", histostd, ',')
 
-    # TESTING 07/23: histo matrix still off by 49 rows! Though nu/nv errors
-    #               are down to just four. But I think it's related to the way 
-    #               we're handling median values.
+    # TESTING 07/29: Success!! Matrices are equivalent. Holy moly!
     writedlm("tests/juliaOut/first_localfilt/histo.csv", histo, ',')
     
     # Locate gridpoints w/higher value than the threshold
@@ -870,14 +857,14 @@ function im_median_magnitude(collection::AbstractArray{Complex{T}}) where {T}
     isempty(i) && return NaN
     n = length(i)
 
-    sort!(i, by= x->(imag(x), real(x)))
-    no2 = n ÷ 2
-    isodd(n) && return i[no2+1]
-    return (i[no2] + i[no2+1]) / 2
+    # sort!(i, by= x->(imag(x), real(x)))
+    # no2 = n ÷ 2
+    # isodd(n) && return i[no2+1]
+    # return (i[no2] + i[no2+1]) / 2
     
     # v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=abs2)
-    # v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=x->(real(x), imag(x)))
-    # return sum(v)/length(v)
+    v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=x -> (abs2(x), angle(x)))
+    return sum(v)/length(v)
 end
 
 """
