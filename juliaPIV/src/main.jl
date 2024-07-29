@@ -44,42 +44,44 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = copy(datax)
     # for i in 1:total_passes - 1
-        # println("Pass ", i, " of ", total_passes )
-    i = 1
+        i = 1
+        println("Pass ", i, " of ", total_passes )
     
-    x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
-    # TESTING 07/17: Success! First iteration is a perfect match!
+        x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
+        # TESTING 07/17: Success! First iteration is a perfect match!
 
-    datax, datay = localfilt(x, y, datax, datay, sensit)
-    # TESTING 07/18: Down to 10 differences!
-    # writedlm("tests/juliaOut/multipass_loop/localfilt_datax.csv", datax, ',')
+        datax, datay = localfilt(x, y, datax, datay, sensit)
+        # TESTING 07/29: Success! First iteration perfect match. 
+        # writedlm("tests/juliaOut/multipass_loop/localfilt_datax.csv", datax, ',')
+        # writedlm("tests/juliaOut/multipass_loop/localfilt_datay.csv", datay, ',')
 
-        # Not currently working on second iteration?
+        # Not currently working on second iteration? Just using og, works great.
         # datax = naninterp(datax, i)
         # datay = naninterp(datay, i)
-        # TESTING: 60 differences with Multiquadratic() -- Interesting blobs in top zone
-        # TESTING: 53 differences with InverseMultiquadratic() -- Might be best balance between top zone and center
-        # TESTING: 53 differences with Gaussian() -- BAD
-        # TESTING: 43 difference with linear_naninterp() -- Closest to MATLAB
-        # TESTING: 50 differences with InverseQuadratic() -- Much more uniform extrapolation into the top but more spotty in the center
-        # TESTING: 52 differences with Polyharmonic() -- weird blob in top left
 
-    #     # OG MATLAB IMPLEMENTATION
-    #     datax, datay = linear_naninterp(datax, datay)
-    #     # TESTING: Down to 11 differences!!
+        #     # OG MATLAB IMPLEMENTATION
+        datax, datay = linear_naninterp(datax, datay)
+        # TESTING 07/29: Down to a single difference after flooring below!!
 
-    #     datax = floor.(Int, datax)
-    #     datay = floor.(Int, datay)
-    #     # writedlm("tests/juliaOut/1stpass_linnaninterp_datax.csv", datax, ',')
+        datax = floor.(Int, datax)
+        datay = floor.(Int, datay)
+        # writedlm("tests/juliaOut/multipass_loop/1stpass_linnaninterp_datax.csv", datax, ',')
+        # writedlm("tests/juliaOut/multipass_loop/1stpass_linnaninterp_datay.csv", datay, ',')
 
-    #     if i != total_passes - 1
-    #         X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
-    #         datax = regular_interp(datax, X, Y, XI, YI)
-    #         datay = regular_interp(datay, X, Y, XI, YI)
-    #     end
+        if i != total_passes - 1
+            X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
+            datax = regular_interp(datax, X, Y, XI, YI)
+            datay = regular_interp(datay, X, Y, XI, YI)
+
+            # TESTING 07/29: Showing 127 different rows on initial testing after
+            #               finally fixing localfilt. 
+            writedlm("tests/juliaOut/multipass_loop/1stpass_reginterp_datax.csv", datax, ',')
+            writedlm("tests/juliaOut/multipass_loop/1stpass_reginterp_datay.csv", datay, ',')
+
+        end
     # end
 
-    # writedlm("tests/juliaOut/penultimate_datax.csv", datax, ',')
+    # writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
 
     # println("Final Pass")
@@ -787,7 +789,7 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     # writedlm("tests/juliaOut/first_localfilt/histostd.csv", histostd, ',')
 
     # TESTING 07/29: Success!! Matrices are equivalent. Holy moly!
-    writedlm("tests/juliaOut/first_localfilt/histo.csv", histo, ',')
+    # writedlm("tests/juliaOut/first_localfilt/histo.csv", histo, ',')
     
     # Locate gridpoints w/higher value than the threshold
     coords = findall(
@@ -802,10 +804,7 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
         nv[coords[jj]] = NaN
     end
 
-    # TESTING: Down to just 4 different values in both nu/nv. Higher quality
-    #          median function is helped a lot. Though that function is still
-    #          getting some incorrect results. See testing above. 7/23
-
+    # TESTING 07/29: Sucess!! Both matrices equivalent. Fixing histo fixed these.
     # writedlm("tests/juliaOut/first_localfilt/nu.csv", nu, ',')
     # writedlm("tests/juliaOut/first_localfilt/nv.csv", nv, ',')
 
@@ -818,8 +817,7 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     hu = nu[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
     hv = nv[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
 
-    # TESTING: Ending the function with 10 differences in each hu/hv. Probably
-    #          related to the median function. 7/23
+    # TESTING 07/29: Matrices equivalent! Everything here is perfect.
     # writedlm("tests/juliaOut/first_localfilt/hu.csv", hu, ',')
     # writedlm("tests/juliaOut/first_localfilt/hv.csv", hv, ',')
 

@@ -433,7 +433,7 @@ function [hu,hv]=localfilt(x,y,u,v,threshold,varargin)
       end
       fprintf('.')
   end
-  writematrix(histo, "../tests/mlabOut/first_localfilt/histo.csv");
+  % writematrix(histo, "../tests/mlabOut/first_localfilt/histo.csv");
 
 
   %%%%%%%% Locate gridpoints with a higher value than the threshold 
@@ -714,10 +714,10 @@ sensit = 3;
 % ------------------------------------------------------------------------------
 % function Multipassx technically
 % Loop disabled for testing
-% tic;
+tic;
 % for i=1:iter-1
-    % disp(['iter ' num2str(i) ' of ' num2str(iter)]);
     i = 1;
+    disp(['iter ' num2str(i) ' of ' num2str(iter)]);
     [x,y,datax,datay] = firstpass(A, B, wins(i, :), overlap, datax, datay);
     % filename = sprintf('firstpass_datax%d.csv', i);
     % path = sprintf("../tests/mlabOut/multipass_loop/%s", filename);
@@ -725,42 +725,50 @@ sensit = 3;
 
     % validation
     [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
+    % writematrix(datax, "../tests/mlabOut/multipass_loop/localfilt_datax.csv");
+    % writematrix(datay, "../tests/mlabOut/multipass_loop/localfilt_datay.csv");
 
-%     [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
+    [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
     
-%     datax=floor(datax);
-%     datay=floor(datay);
+    datax=floor(datax);
+    datay=floor(datay);
+    % writematrix(datax, "../tests/mlabOut/multipass_loop/1stpass_linnaninterp_datax.csv");
+    % writematrix(datay, "../tests/mlabOut/multipass_loop/1stpass_linnaninterp_datay.csv");
 
-%     % % expand the velocity data to twice the original size
-%     if(i~=iter-1)
-%       if wins(i,1)~=wins(i+1,1)
-%         X=(1:((1-overlap)*2*wins(i+1,1)):sx-2*wins(i+1,1)+1) + wins(i+1,1);
-%         XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
-%       else
-%         XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
-%         X=XI;
-%       end
-%       if wins(i,2)~=wins(i+1,2)
-%         Y=(1:((1-overlap)*2*wins(i+1,2)):sy-2*wins(i+1,2)+1) + wins(i+1,2);
-%         YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
-%       else
-%         YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
-%         Y=YI; 
-%       end
+    % expand the velocity data to twice the original size
+    if(i~=iter-1)
+      if wins(i,1)~=wins(i+1,1)
+        X=(1:((1-overlap)*2*wins(i+1,1)):sx-2*wins(i+1,1)+1) + wins(i+1,1);
+        XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+      else
+        XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+        X=XI;
+      end
+      if wins(i,2)~=wins(i+1,2)
+        Y=(1:((1-overlap)*2*wins(i+1,2)):sy-2*wins(i+1,2)+1) + wins(i+1,2);
+        YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+      else
+        YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+        Y=YI; 
+      end
 
-%       datax=round(interp2(X, Y', datax, XI, YI'));
-%       datay=round(interp2(X, Y', datay, XI, YI'));
+      datax=round(interp2(X, Y', datax, XI, YI'));
+      datay=round(interp2(X, Y', datay, XI, YI'));
 
-%       [datax,datay]=naninterp(datax, datay, 'linear', [], ...
-%                               repmat(XI, size(datax, 1), 1), ...
-%                               repmat(YI', 1, size(datax, 2)) ...
-%                               ); 
+      [datax,datay]=naninterp(datax, datay, 'linear', [], ...
+                              repmat(XI, size(datax, 1), 1), ...
+                              repmat(YI', 1, size(datax, 2)) ...
+                              ); 
       
-%       datax=round(datax);
-%       datay=round(datay);
-%     end
+      datax=round(datax);
+      datay=round(datay);
+
+      writematrix(datax, "../tests/mlabOut/multipass_loop/1stpass_reginterp_datax.csv");
+      writematrix(datay, "../tests/mlabOut/multipass_loop/1stpass_reginterp_datay.csv");
+    end
 % end
 toc
+% writematrix(datax, "../tests/mlabOut/multipass_loop/penultimate_datax.csv");
 % writematrix(datay, "../tests/mlabOut/multipass_loop/penultimate_datay.csv");
 
 % % % Final pass gives displacement to subpixel accuracy
