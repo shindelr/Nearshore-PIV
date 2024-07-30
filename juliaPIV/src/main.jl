@@ -43,8 +43,8 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = copy(datax)
-    # for i in 1:total_passes - 1
-        i = 1
+    for i in 1:total_passes - 1
+        # i = 1
         println("Pass ", i, " of ", total_passes )
     
         x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
@@ -69,23 +69,25 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
         # writedlm("tests/juliaOut/multipass_loop/1stpass_linnaninterp_datay.csv", datay, ',')
 
         if i != total_passes - 1
-            X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)
+            X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)  # Success
             datax = regular_interp(datax, X, Y, XI, YI)
             datay = regular_interp(datay, X, Y, XI, YI)
 
             # TESTING 07/29: Showing 127 different rows on initial testing after
             #               finally fixing localfilt. 
-            writedlm("tests/juliaOut/multipass_loop/1stpass_reginterp_datax.csv", datax, ',')
-            writedlm("tests/juliaOut/multipass_loop/1stpass_reginterp_datay.csv", datay, ',')
+            datax = round.(datax)
+            datay = round.(datay)
+            # writedlm("tests/juliaOut/multipass_loop/1stpass_reginterp_datax.csv", datax, ',')
+            # writedlm("tests/juliaOut/multipass_loop/1stpass_reginterp_datay.csv", datay, ',')
 
         end
-    # end
+    end
 
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
 
     # println("Final Pass")
-    # x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
+    x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
 
 
     # Dummy values
@@ -245,7 +247,6 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
     return xx, yy, datax, datay
 end
 
-# HALFWAY FINISHED
 """
 ### finalpass
     TODO: Write me.
@@ -266,7 +267,7 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
     if length(N) == 1
         M = N
     else
-        M = N[1]; N = N[2]
+    M = N[1]; N = N[2]
     end
 
     if pad
@@ -285,6 +286,7 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
     yp = copy(xp); up = copy(xp); vp = copy(xp); SnR = copy(xp); Pkh = copy(xp)
    
     # Main pass loop
+    counter = 0
     for jj in 1:((1 - ol) * N):sy - N + 1
         ci = 1
         for ii in 1:((1 - ol) * M):sx - M + 1
@@ -368,31 +370,45 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 
                 # Unpack cartesian index type. Only a handful iterations here
                 if length(max_coords) == 1
+                    counter += 1
                     for (i, j) in max_coords
                         max_y1 = i; max_x1 = j
                     end
                 end
                 
                 # Some kind of manual adjustment?
-                # if max_x1 == 1
-                #     max_x1 = 2
-                # end
-                # if max_y1 == 1
-                #     max_y1 = 2
-                # end
-
+                if max_x1 == 1
+                    max_x1 = 2
+                end
+                if max_y1 == 1
+                    max_y1 = 2
+                end
+                
+                x_0, y_0 = intpeak(max_x1, max_y1, 
+                                R[max_y1, max_x1],
+                                R[max_y1, max_x1 - 1],
+                                R[max_y1, max_x1 + 1],
+                                R[max_y1 - 1, max_x1],
+                                R[max_y1 + 1, max_x1],
+                                N
+                )
+                
 
 
 
             else
+                up[cj, ci] = NaN
+                vp[cj, ci] = NaN
+                SnR[cj, ci] = NaN
+                Pkh[cj, ci] = 0
+                xp[cj, ci] = ii + M / 2 - 1
+                yp[cj, ci] = jj + N / 2 - 1
             end
-
-
             ci += 1
         end
         cj += 1
     end
-    
+    @show counter
     println("Leaving Final Pass")
 end
 
@@ -822,6 +838,43 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     # writedlm("tests/juliaOut/first_localfilt/hv.csv", hv, ',')
 
     return hu, hv
+end
+
+"""
+### intpeak
+    Interpolates correlation peaks in PIV.
+    Parameters:
+        x1, y1 : Maximual values in respective directions
+        N : Interrogation window size
+        Rxm1, Rxp1 : X-max values in matrix R "minus" or "plus" 1.
+        Rym1, Ryp1 : Same as above but Y vals.
+        R: Matrix resulting from xcorrf2.
+    Interpolation uses Gaussian method.
+
+    Original Author:
+    Time stamp: 12:32, Apr. 14, 2004.
+    Copyright 1998-2004, J. Kristian Sveen, 
+    jks@math.uio.no/jks36@damtp.cam.ac.uk
+    Dept of Mathmatics, University of Oslo/ 
+    DAMTP, Univ. of Cambridge, UK
+    Distributed under the GNU general public license.
+"""
+function intpeak(x1, y1, R, Rxm1, Rxp1, Rym1, Ryp1, N)
+    if length(N) == 2
+        M = N[1]; N = N[2]
+    else
+        M = N
+    end
+
+    x01 = x1 + ((log(Rxm1) - log(Rxp1)) / ((2 * log(Rxm1)) - (4 * log(R)) + (2 * log(Rxp1))))
+    y01 = y1 + ((log(Rym1) - log(Ryp1)) / ((2 * log(Rym1)) - (4 * log(R)) + (2 * log(Ryp1))))
+    x0 = x01 - M
+    y0 = y01 - N
+
+    x0 = real(x0)
+    y0 = real(y0)
+
+    return x0, y0
 end
 
 

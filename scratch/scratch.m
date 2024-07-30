@@ -1,3 +1,45 @@
+function [x0,y0]=intpeak(x1,y1,R,Rxm1,Rxp1,Rym1,Ryp1,method,N)
+  if length(N)==2
+      M=N(1); N=N(2);
+  else
+      M=N;
+  end
+  
+  if any(find(([R Rxm1 Rxp1 Rym1 Ryp1])==0))
+      % to avoid Log of Zero warnings
+      method=1;
+  end
+  
+  if method==1  
+      x01=(((x1-1)*Rxm1)+(x1*R)+((x1+1)*Rxp1)) / (Rxm1+ R+Rxp1);
+      y01=(((y1-1)*Rym1)+(y1*R)+((y1+1)*Ryp1)) / (Rym1+ R+Ryp1);
+      x0=x01-(M);
+      y0=y01-(N);
+  elseif method==2  
+      x01=x1 + ( (log(Rxm1)-log(Rxp1))/( (2*log(Rxm1))-(4*log(R))+(2*log(Rxp1))) );
+      y01=y1 + ( (log(Rym1)-log(Ryp1))/( (2*log(Rym1))-(4*log(R))+(2*log(Ryp1))) );  
+      x0=x01-(M);
+      y0=y01-(N);  
+  elseif method==3
+      x01=x1 + ( (Rxm1-Rxp1)/( (2*Rxm1)-(4*R)+(2*Rxp1)) );
+      y01=y1 + ( (Rym1-Ryp1)/( (2*Rym1)-(4*R)+(2*Ryp1)) ); 
+      x0=x01-(M);
+      y0=y01-(N);
+      
+      
+  else
+      
+      disp(['Please include your desired peakfitting function; 1 for',...
+      ' 3-point fit, 2 for gaussian fit, 3 for parabolic fit'])
+      
+  end
+  
+  
+  x0=real(x0);
+  y0=real(y0);
+end
+% -----------------------------------------------
+% -----------------------------------------------
 function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
   if length(N)==1
     M=N;
@@ -81,12 +123,16 @@ function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
         if max_y1==1
           max_y1=2;
         end
+
+        % if max_x1 ~= 16 && max_y1 ~= 16
+        %   disp([max_x1, max_y1])
+        % end
         
-      %   % 3-point peak fit using centroid, gaussian (default)
-      %   % or parabolic fit
-      %   [x0 y0]=intpeak(max_x1,max_y1,R(max_y1,max_x1),...
-      %                   R(max_y1,max_x1-1),R(max_y1,max_x1+1),...
-      %                   R(max_y1-1,max_x1),R(max_y1+1,max_x1),2,[M,N]);
+        % 3-point peak fit using centroid, gaussian (default)
+        % or parabolic fit
+        [x0 y0]=intpeak(max_x1,max_y1,R(max_y1,max_x1),...
+                        R(max_y1,max_x1-1),R(max_y1,max_x1+1),...
+                        R(max_y1-1,max_x1),R(max_y1+1,max_x1),2,[M,N]);
         
   
       %   % calculate signal to noise ratio
@@ -126,13 +172,13 @@ function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
       %   SnR(cj,ci)=snr;
       %   Pkh(cj,ci)=R(max_y1,max_x1);
       
-      % else
-      %   up(cj,ci)=NaN;
-      %   vp(cj,ci)=NaN;
-      %   SnR(cj,ci)=NaN;
-      %   Pkh(cj,ci)=0;
-      %   xp(cj,ci)=(ii+(M/2)-1);
-      %   yp(cj,ci)=(jj+(N/2)-1);
+      else
+        up(cj,ci)=NaN;
+        vp(cj,ci)=NaN;
+        SnR(cj,ci)=NaN;
+        Pkh(cj,ci)=0;
+        xp(cj,ci)=(ii+(M/2)-1);
+        yp(cj,ci)=(jj+(N/2)-1);
       end
   
       ci=ci+1;
@@ -715,8 +761,8 @@ sensit = 3;
 % function Multipassx technically
 % Loop disabled for testing
 tic;
-% for i=1:iter-1
-    i = 1;
+for i=1:iter-1
+    % i = 1;
     disp(['iter ' num2str(i) ' of ' num2str(iter)]);
     [x,y,datax,datay] = firstpass(A, B, wins(i, :), overlap, datax, datay);
     % filename = sprintf('firstpass_datax%d.csv', i);
@@ -763,19 +809,19 @@ tic;
       datax=round(datax);
       datay=round(datay);
 
-      writematrix(datax, "../tests/mlabOut/multipass_loop/1stpass_reginterp_datax.csv");
-      writematrix(datay, "../tests/mlabOut/multipass_loop/1stpass_reginterp_datay.csv");
+      % writematrix(datax, "../tests/mlabOut/multipass_loop/1stpass_reginterp_datax.csv");
+      % writematrix(datay, "../tests/mlabOut/multipass_loop/1stpass_reginterp_datay.csv");
     end
-% end
-toc
+end
 % writematrix(datax, "../tests/mlabOut/multipass_loop/penultimate_datax.csv");
 % writematrix(datay, "../tests/mlabOut/multipass_loop/penultimate_datay.csv");
 
 % % % Final pass gives displacement to subpixel accuracy
-% disp('Final iteration')
+disp('Final iteration')
 
 % % % Call plan_fft
 
-% [x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
+[x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
+toc
 
 % ------ TEST ZONE ------
