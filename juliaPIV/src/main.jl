@@ -5,7 +5,6 @@ using FFTW            # Fast Fourier Transforms library built on C
 using Images          # Basic image processing library
 using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
-using ProgressBars
 using Skipper         # Special skipping library to skip NaNs and other things
 using Interpolations
 using ScatteredInterpolation
@@ -43,8 +42,8 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = copy(datax)
-    for i in 1:total_passes - 1
-        # i = 1
+    # for i in 1:total_passes - 1
+        i = 1
         println("Pass ", i, " of ", total_passes )
     
         x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
@@ -77,18 +76,19 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             #               finally fixing localfilt. 
             datax = round.(datax)
             datay = round.(datay)
-            # writedlm("tests/juliaOut/multipass_loop/1stpass_reginterp_datax.csv", datax, ',')
-            # writedlm("tests/juliaOut/multipass_loop/1stpass_reginterp_datay.csv", datay, ',')
+            writedlm("tests/juliaOut/multipass_loop/reginterp_datax.csv", datax, ',')
+            writedlm("tests/juliaOut/multipass_loop/reginterp_datay.csv", datay, ',')
 
         end
-    end
+    # end
 
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
 
     # println("Final Pass")
-    x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
 
+    # TODO: THIS WHOLE FUNCTION NEEDS TESTING. NOT CURRENTLY READY
+    # x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
 
     # Dummy values
     x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
@@ -286,7 +286,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
     yp = copy(xp); up = copy(xp); vp = copy(xp); SnR = copy(xp); Pkh = copy(xp)
    
     # Main pass loop
-    counter = 0
     for jj in 1:((1 - ol) * N):sy - N + 1
         ci = 1
         for ii in 1:((1 - ol) * M):sx - M + 1
@@ -345,7 +344,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 else
                     subset = R[Int(floor(.5 * N + 2)):Int(floor(1.5 * N - 3)), 
                                 Int(floor(.5 * M + 2)):Int(floor(1.5 * M - 3))]
-                    # max = maximum(R)
                     max = maximum(subset)
                     max_coords = findall(x -> x == max, subset)
                     max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
@@ -370,7 +368,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 
                 # Unpack cartesian index type. Only a handful iterations here
                 if length(max_coords) == 1
-                    counter += 1
                     for (i, j) in max_coords
                         max_y1 = i; max_x1 = j
                     end
@@ -384,6 +381,8 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                     max_y1 = 2
                 end
                 
+                # Runs without error, TODO:TESTING
+                # 3-point peak fit using gaussian fit
                 x_0, y_0 = intpeak(max_x1, max_y1, 
                                 R[max_y1, max_x1],
                                 R[max_y1, max_x1 - 1],
@@ -393,9 +392,47 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                                 N
                 )
                 
+                R2 = copy(R)
 
+                # This section had a note to try to simplify their try-catch
+                # clause by using a distance check. TODO:TESTING
+                if max_y1 > 3 && max_x1 > 3
+                    R2[max_y1 - 3:max_y1 + 3, max_x1 - 3: max_x1 + 3] .= NaN
+                else
+                    R2[max_y1 - 1: max_y1 + 1, max_x1 - 1: max_x1 + 1] .= NaN
+                end
 
+                # TODO: TESTING
+                if size(R, 1) == N - 1
+                    max_val = maximum(R2)
+                    p2_y2, p2_x2 = findall(x -> x == max_val, R2)[1]
+                else
+                    subset = R2[floor(Int, 0.5 * N):floor(Int, 1.5 * N - 1), 
+                                floor(Int, 0.5 * M):floor(Int, 1.5 * M - 1)]
+                    subset_max_val = maximum(subset)
+                    max_coords = findall(x -> x == subset_max_val, subset)
+                    max_coords = [(i[1] + Int(0.5 * N + 1), 
+                                   i[2] + Int(0.5 * M + 1))
+                                   for i in max_coords]
+                end
 
+                # TODO: TESTING
+                if length(max_coords) > 1
+                    p2_x2 = round(length(max_coords) ./ 2)
+                    p2_y2 = round(length(max_coords) ./ 2)
+                elseif isempty(max_coords)
+                    # ?
+                end
+
+                # TODO: TESTING
+                snr = R[max_y1, max_x1] / R2[p2_y2, p2_x2]
+                SnR[cj, ci] = snr
+                up[cj, ci] = (-x0 + idx[cj, ci]) / Dt
+                vp[cj, ci] = (-y0 + idy[cj, ci]) / Dt
+                xp[cj, ci] = ii + (M / 2) - 1
+                yp[cj, ci] = jj + (N / 2) - 1
+                Pkh[cj, ci] = R[max_y1, max_x1]
+                
             else
                 up[cj, ci] = NaN
                 vp[cj, ci] = NaN
@@ -408,7 +445,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
         end
         cj += 1
     end
-    @show counter
     println("Leaving Final Pass")
 end
 
@@ -673,19 +709,18 @@ function regular_interp(samples, xs, ys, XI, YI)
     for (mi, yi) in enumerate(YI)
         for (ni, xi) in enumerate(XI)
             # Interpolate the interior of the matrix
-            if (33 < xi < 3041) && (33 < yi < 2017)
+            try 
                 itp_results[mi, ni] = itp(yi, xi)
-            else
-            # Extrapolate the exterior
+            # Otherwise, extrapolate
+            catch BoundsError
+                println("Extrapolated at $mi, $ni\n")
                 itp_results[mi, ni] = extp(yi, xi)
             end
         end
     end
+    # writedlm("tests/juliaOut/try_catch.csv", itp_results, ',')
 
-    # return round.(Int, itp_results)
-    # Returning float to stay compatible with the rest of the program?
     return itp_results
-
 end
 
 function build_grids(wins, overlap, sx, sy, i)
@@ -865,9 +900,8 @@ function intpeak(x1, y1, R, Rxm1, Rxp1, Rym1, Ryp1, N)
     else
         M = N
     end
-
-    x01 = x1 + ((log(Rxm1) - log(Rxp1)) / ((2 * log(Rxm1)) - (4 * log(R)) + (2 * log(Rxp1))))
-    y01 = y1 + ((log(Rym1) - log(Ryp1)) / ((2 * log(Rym1)) - (4 * log(R)) + (2 * log(Ryp1))))
+    x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / ((2 * log(complex(Rxm1))) - (4 * log(R)) + (2 * log(complex(Rxp1)))))
+    y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / ((2 * log(complex(Rym1))) - (4 * log(R)) + (2 * log(complex(Ryp1)))))
     x0 = x01 - M
     y0 = y01 - N
 

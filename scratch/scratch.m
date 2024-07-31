@@ -7,6 +7,7 @@ function [x0,y0]=intpeak(x1,y1,R,Rxm1,Rxp1,Rym1,Ryp1,method,N)
   
   if any(find(([R Rxm1 Rxp1 Rym1 Ryp1])==0))
       % to avoid Log of Zero warnings
+      disp("Here")
       method=1;
   end
   
@@ -58,7 +59,7 @@ function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
   vp=xp;
   SnR=xp;
   Pkh=xp;
-%   % main loop
+  % main loop
   for jj=1:((1-ol)*N):sy-N+1
     ci=1;
     for ii=1:((1-ol)*M):sx-M+1
@@ -135,42 +136,44 @@ function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
                         R(max_y1-1,max_x1),R(max_y1+1,max_x1),2,[M,N]);
         
   
-      %   % calculate signal to noise ratio
-      %   R2=R;
-      %   try
-      %     %consider changing this from try-catch to a simpler
-      %     %distance check. The key here is the distance tot he
-      %     %image edge. When peak is close to edge, this NaN
-      %     %allocation may fail.
-      %     R2(max_y1-3:max_y1+3,max_x1-3:max_x1+3)=NaN;
-      %   catch
-      %     R2(max_y1-1:max_y1+1,max_x1-1:max_x1+1)=NaN;
-      %   end
-      %   if size(R,1)==(N-1)
-      %     [p2_y2,p2_x2]=find(R2==max(R2(:)));                    
-      %   else
-      %     [p2_y2,p2_x2]=find(R2==max(max(R2(0.5*N:1.5*N-1,0.5*M:1.5*M-1))));
-      %   end
-      %   if length(p2_x2)>1
-      %     p2_x2=p2_x2(round(length(p2_x2)/2));
-      %     p2_y2=p2_y2(round(length(p2_y2)/2));
-      %   elseif isempty(p2_x2)
-          
-      %   end
-      %   snr=R(max_y1,max_x1)/R2(p2_y2,p2_x2);
-      %   % signal to mean:
-      %   %snr=R(max_y1,max_x1)/mean(R(:));
-      %   % signal to median:
-      %   %snr=R(max_y1,max_x1)/median(median(R(0.5*N+2:1.5*N-3,...
-      %   %    0.5*M+2:1.5*M-3)));
+        % calculate signal to noise ratio
+        R2=R;
+        try
+          %consider changing this from try-catch to a simpler
+          %distance check. The key here is the distance tot he
+          %image edge. When peak is close to edge, this NaN
+          %allocation may fail.
+          R2(max_y1-3:max_y1+3,max_x1-3:max_x1+3)=NaN;
+        catch
+          R2(max_y1-1:max_y1+1,max_x1-1:max_x1+1)=NaN;
+        end
+
+        if size(R,1)==(N-1)
+          [p2_y2,p2_x2]=find(R2==max(R2(:)));                    
+        else
+          [p2_y2,p2_x2]=find(R2==max(max(R2(0.5*N:1.5*N-1,0.5*M:1.5*M-1))));
+        end
+
+        if length(p2_x2)>1
+          p2_x2=p2_x2(round(length(p2_x2)/2));
+          p2_y2=p2_y2(round(length(p2_y2)/2));
+        elseif isempty(p2_x2)
+        end
+
+        snr=R(max_y1,max_x1)/R2(p2_y2,p2_x2);
+        % signal to mean:
+        % snr=R(max_y1,max_x1)/mean(R(:));
+        % signal to median:
+        % snr=R(max_y1,max_x1)/median(median(R(0.5*N+2:1.5*N-3,...
+        %    0.5*M+2:1.5*M-3)));
   
-      %   % store displacements, SnR and Peak Height
-      %   up(cj,ci)=(-x0+idx(cj,ci))/Dt;
-      %   vp(cj,ci)=(-y0+idy(cj,ci))/Dt;
-      %   xp(cj,ci)=(ii+(M/2)-1);
-      %   yp(cj,ci)=(jj+(N/2)-1);
-      %   SnR(cj,ci)=snr;
-      %   Pkh(cj,ci)=R(max_y1,max_x1);
+        % store displacements, SnR and Peak Height
+        up(cj,ci)=(-x0+idx(cj,ci))/Dt;
+        vp(cj,ci)=(-y0+idy(cj,ci))/Dt;
+        xp(cj,ci)=(ii+(M/2)-1);
+        yp(cj,ci)=(jj+(N/2)-1);
+        SnR(cj,ci)=snr;
+        Pkh(cj,ci)=R(max_y1,max_x1);
       
       else
         up(cj,ci)=NaN;
@@ -186,60 +189,60 @@ function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
     cj=cj+1;
   end
 
-%   % now we inline the function XCORRF2 to shave off some time.
-%   function c = xcorrf2(a,b,pad)
-%   %  c = xcorrf2(a,b)
-%   %   Two-dimensional cross-correlation using Fourier transforms.
-%   %       XCORRF2(A,B) computes the crosscorrelation of matrices A and B.
-%   %       XCORRF2(A) is the autocorrelation function.
-%   %       This routine is functionally equivalent to xcorr2 but usually faster.
-%   %       See also XCORR2.
+  % now we inline the function XCORRF2 to shave off some time.
+  function c = xcorrf2(a,b,pad)
+  %  c = xcorrf2(a,b)
+  %   Two-dimensional cross-correlation using Fourier transforms.
+  %       XCORRF2(A,B) computes the crosscorrelation of matrices A and B.
+  %       XCORRF2(A) is the autocorrelation function.
+  %       This routine is functionally equivalent to xcorr2 but usually faster.
+  %       See also XCORR2.
   
-%   %       Author(s): R. Johnson
-%   %       $Revision: 1.0 $  $Date: 1995/11/27 $
+  %       Author(s): R. Johnson
+  %       $Revision: 1.0 $  $Date: 1995/11/27 $
   
-%   if nargin==2
-%       pad='yes';
-%   end
+  if nargin==2
+      pad='yes';
+  end
   
-%   [ma,na] = size(a);
-%   %   if nargin == 1
-%   %     %       for autocorrelation
-%   %     b = a;
-%   %   end
-%   [mb,nb] = size(b);
-%   %       make reverse conjugate of one array
-%   b = conj(b(mb:-1:1,nb:-1:1));
-%   if strcmp(pad,'yes');
-%       %       use power of 2 transform lengths
-%       mf = 2^nextpow2(ma+mb);
-%       nf = 2^nextpow2(na+nb);
-%       at = fft2(b,mf,nf);
-%       bt = fft2(a,mf,nf);
-%   elseif strcmp(pad,'no');
-%       disp("pad no");
-%       at = fft2(b);
-%       bt = fft2(a);
-%   else
-%     % disp('Wrong input to XCORRF2'); return
-%   end
-%   %       multiply transforms then inverse transform
-%   c = ifft2(at.*bt);
-%   %       make real output for real input
-%   if ~any(any(imag(a))) && ~any(any(imag(b)))
-%       c = real(c);
-%   end
-%   if strcmp(pad,'yes');
-%       %  trim to standard size
-%       c(ma+mb:mf,:) = [];
-%       c(:,na+nb:nf) = [];
-%   elseif strcmp(pad,'no');
-%       c=(c(1:end-1,1:end-1));
+  [ma,na] = size(a);
+  %   if nargin == 1
+  %     %       for autocorrelation
+  %     b = a;
+  %   end
+  [mb,nb] = size(b);
+  %       make reverse conjugate of one array
+  b = conj(b(mb:-1:1,nb:-1:1));
+  if strcmp(pad,'yes');
+      %       use power of 2 transform lengths
+      mf = 2^nextpow2(ma+mb);
+      nf = 2^nextpow2(na+nb);
+      at = fft2(b,mf,nf);
+      bt = fft2(a,mf,nf);
+  elseif strcmp(pad,'no');
+      disp("pad no");
+      at = fft2(b);
+      bt = fft2(a);
+  else
+    % disp('Wrong input to XCORRF2'); return
+  end
+  %       multiply transforms then inverse transform
+  c = ifft2(at.*bt);
+  %       make real output for real input
+  if ~any(any(imag(a))) && ~any(any(imag(b)))
+      c = real(c);
+  end
+  if strcmp(pad,'yes');
+      %  trim to standard size
+      c(ma+mb:mf,:) = [];
+      c(:,na+nb:nf) = [];
+  elseif strcmp(pad,'no');
+      c=(c(1:end-1,1:end-1));
       
-%       %    c(ma+mb:mf,:) = [];
-%       %    c(:,na+nb:nf) = [];
-%   end
-% end
+      %    c(ma+mb:mf,:) = [];
+      %    c(:,na+nb:nf) = [];
+  end
+end
 end
 % -----------------------------------------------
 % -----------------------------------------------
@@ -761,8 +764,8 @@ sensit = 3;
 % function Multipassx technically
 % Loop disabled for testing
 tic;
-for i=1:iter-1
-    % i = 1;
+% for i=1:iter-1
+    i = 1;
     disp(['iter ' num2str(i) ' of ' num2str(iter)]);
     [x,y,datax,datay] = firstpass(A, B, wins(i, :), overlap, datax, datay);
     % filename = sprintf('firstpass_datax%d.csv', i);
@@ -809,19 +812,19 @@ for i=1:iter-1
       datax=round(datax);
       datay=round(datay);
 
-      % writematrix(datax, "../tests/mlabOut/multipass_loop/1stpass_reginterp_datax.csv");
-      % writematrix(datay, "../tests/mlabOut/multipass_loop/1stpass_reginterp_datay.csv");
+      writematrix(datax, "../tests/mlabOut/multipass_loop/reginterp_datax.csv");
+      writematrix(datay, "../tests/mlabOut/multipass_loop/reginterp_datay.csv");
     end
-end
+% end
 % writematrix(datax, "../tests/mlabOut/multipass_loop/penultimate_datax.csv");
 % writematrix(datay, "../tests/mlabOut/multipass_loop/penultimate_datay.csv");
 
 % % % Final pass gives displacement to subpixel accuracy
-disp('Final iteration')
+% disp('Final iteration')
 
 % % % Call plan_fft
 
-[x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
+% [x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
 toc
 
 % ------ TEST ZONE ------
