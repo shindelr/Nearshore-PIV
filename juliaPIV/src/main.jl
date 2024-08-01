@@ -42,8 +42,8 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = copy(datax)
-    # for i in 1:total_passes - 1
-        i = 1
+    for i in 1:total_passes - 1
+        # i = 1
         println("Pass ", i, " of ", total_passes )
     
         x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
@@ -67,20 +67,31 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
         # writedlm("tests/juliaOut/multipass_loop/1stpass_linnaninterp_datax.csv", datax, ',')
         # writedlm("tests/juliaOut/multipass_loop/1stpass_linnaninterp_datay.csv", datay, ',')
 
+
         if i != total_passes - 1
-            X, Y, XI, YI = build_grids(wins, overlap, sx, sy, i)  # Success
-            datax = regular_interp(datax, X, Y, XI, YI)
-            datay = regular_interp(datay, X, Y, XI, YI)
+            Y, X, YI, XI = build_grids_2(datax)
+            datax = round.(regular_interp(datax, X, Y, XI, YI))
+            datay = round.(regular_interp(datay, X, Y, XI, YI))
+
+            # path = "tests/heatmaps/juliaIter$i"
+            # savefig(heatmap(XI, YI, datax, title="Julia iter $i", color=:viridis), path)
+
+
 
             # TESTING 07/29: Showing 127 different rows on initial testing after
             #               finally fixing localfilt. 
-            datax = round.(datax)
-            datay = round.(datay)
-            writedlm("tests/juliaOut/multipass_loop/reginterp_datax.csv", datax, ',')
-            writedlm("tests/juliaOut/multipass_loop/reginterp_datay.csv", datay, ',')
+            # writedlm("tests/juliaOut/multipass_loop/reginterp_datax.csv", datax, ',')
+            # writedlm("tests/juliaOut/multipass_loop/reginterp_datay.csv", datay, ',')
 
+        #     path = "tests/heatmaps/juliaIter$i"
+        #     savefig(heatmap(XI, YI, datax, title="Julia iter $i", color=:viridis), path)
+
+        # else
+        #     path = "tests/heatmaps/juliaIter$i"
+        #     Y, X, YI, XI = build_grids_2(datax)
+        #     savefig(heatmap(X, Y, datax, title="Julia iter $i", color=:viridis), path)
         end
-    # end
+    end
 
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
@@ -702,25 +713,23 @@ end
 
 function regular_interp(samples, xs, ys, XI, YI)
     itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
-    extp = Interpolations.extrapolate(itp, Line())
-
     itp_results = zeros(Float64, (length(YI), length(XI)))
-
-    for (mi, yi) in enumerate(YI)
-        for (ni, xi) in enumerate(XI)
-            # Interpolate the interior of the matrix
-            try 
-                itp_results[mi, ni] = itp(yi, xi)
-            # Otherwise, extrapolate
-            catch BoundsError
-                println("Extrapolated at $mi, $ni\n")
-                itp_results[mi, ni] = extp(yi, xi)
-            end
-        end
-    end
-    # writedlm("tests/juliaOut/try_catch.csv", itp_results, ',')
-
+    itp_results = [itp(yi, xi) for yi in YI, xi in XI]
     return itp_results
+end
+
+function build_grids_2(data)
+    coarse_y_dim = size(data, 1)
+    coarse_x_dim = size(data, 2)
+    coarse_ys = LinRange(0, 1, coarse_y_dim)
+    coarse_xs = LinRange(0, 1, coarse_x_dim)
+
+    fine_yi_dim = (coarse_y_dim * 2) + 1
+    fine_xi_dim = (coarse_x_dim * 2) + 1
+    fine_YI = LinRange(0, 1, fine_yi_dim)
+    fine_XI = LinRange(0, 1, fine_xi_dim)
+
+    return coarse_ys, coarse_xs, fine_YI, fine_XI
 end
 
 function build_grids(wins, overlap, sx, sy, i)
@@ -914,24 +923,6 @@ end
 
 # COMPLEX NUMBER STATISTICS
 """
-### im_median
-    Find the median of the argued collection of complex numbers.
-    If the collection is empty, returns NaN.
-"""
-function im_median(collection)
-    i = filter(x -> !isnan(x), collection)
-
-    if length(i) > 0
-        real_part = median(real(i))
-        im_part = median(imag(i))
-        return real_part + im_part * im
-    end
-
-    # If all NaN
-    return NaN
-end
-
-"""
 ## im_median_magnitude
     Take the median of a collection of complex numbers using the absolute magnitude.
     This great function was created by the Julia Community, specifically:
@@ -941,13 +932,6 @@ function im_median_magnitude(collection::AbstractArray{Complex{T}}) where {T}
     i = filter(x -> !isnan(x), collection)
     isempty(i) && return NaN
     n = length(i)
-
-    # sort!(i, by= x->(imag(x), real(x)))
-    # no2 = n ÷ 2
-    # isodd(n) && return i[no2+1]
-    # return (i[no2] + i[no2+1]) / 2
-    
-    # v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=abs2)
     v = partialsort!(i, div(n+1, 2, RoundDown):div(n+1, 2, RoundUp); by=x -> (abs2(x), angle(x)))
     return sum(v)/length(v)
 end
