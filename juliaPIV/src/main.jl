@@ -73,23 +73,12 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             datax = round.(regular_interp(datax, X, Y, XI, YI))
             datay = round.(regular_interp(datay, X, Y, XI, YI))
 
-            # path = "tests/heatmaps/juliaIter$i"
-            # savefig(heatmap(XI, YI, datax, title="Julia iter $i", color=:viridis), path)
-
-
 
             # TESTING 07/29: Showing 127 different rows on initial testing after
             #               finally fixing localfilt. 
-            # writedlm("tests/juliaOut/multipass_loop/reginterp_datax.csv", datax, ',')
-            # writedlm("tests/juliaOut/multipass_loop/reginterp_datay.csv", datay, ',')
+            # writedlm("tests/juliaOut/multipass_loop/interp_datax.csv", datax, ',')
+            # writedlm("tests/juliaOut/multipass_loop/interp_datay.csv", datay, ',')
 
-        #     path = "tests/heatmaps/juliaIter$i"
-        #     savefig(heatmap(XI, YI, datax, title="Julia iter $i", color=:viridis), path)
-
-        # else
-        #     path = "tests/heatmaps/juliaIter$i"
-        #     Y, X, YI, XI = build_grids_2(datax)
-        #     savefig(heatmap(X, Y, datax, title="Julia iter $i", color=:viridis), path)
         end
     end
 
@@ -721,13 +710,16 @@ end
 function build_grids_2(data)
     coarse_y_dim = size(data, 1)
     coarse_x_dim = size(data, 2)
-    coarse_ys = LinRange(0, 1, coarse_y_dim)
-    coarse_xs = LinRange(0, 1, coarse_x_dim)
+
+    min_y, max_y = minimum(data[:, 1]), maximum(data[:, 1])
+    min_x, max_x = minimum(data[1, :]), maximum(data[1, :])
+    coarse_ys = LinRange(min_y, max_y, coarse_y_dim)
+    coarse_xs = LinRange(min_x, max_x, coarse_x_dim)
 
     fine_yi_dim = (coarse_y_dim * 2) + 1
     fine_xi_dim = (coarse_x_dim * 2) + 1
-    fine_YI = LinRange(0, 1, fine_yi_dim)
-    fine_XI = LinRange(0, 1, fine_xi_dim)
+    fine_YI = LinRange(min_y, max_y, fine_yi_dim)
+    fine_XI = LinRange(min_x, max_x, fine_xi_dim)
 
     return coarse_ys, coarse_xs, fine_YI, fine_XI
 end
