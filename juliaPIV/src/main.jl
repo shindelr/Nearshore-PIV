@@ -42,8 +42,8 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
     datax = zeros(eltype(A), (data_dim_1, data_dim_2))
     datay = copy(datax)
-    for i in 1:total_passes - 1
-        # i = 1
+    # for i in 1:total_passes - 1
+        i = 1
         println("Pass ", i, " of ", total_passes )
     
         x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
@@ -62,10 +62,11 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
         datax, datay = linear_naninterp(datax, datay)
         # TESTING 07/29: Down to a single difference after flooring below!!
 
+        println("Writing CSVs")
         datax = floor.(Int, datax)
         datay = floor.(Int, datay)
-        # writedlm("tests/juliaOut/multipass_loop/1stpass_linnaninterp_datax.csv", datax, ',')
-        # writedlm("tests/juliaOut/multipass_loop/1stpass_linnaninterp_datay.csv", datay, ',')
+        writedlm("tests/juliaOut/datax.csv", datax, ',')
+        writedlm("tests/juliaOut/datay.csv", datay, ',')
 
 
         if i != total_passes - 1
@@ -80,7 +81,7 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             # writedlm("tests/juliaOut/multipass_loop/interp_datay.csv", datay, ',')
 
         end
-    end
+    # end
 
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
