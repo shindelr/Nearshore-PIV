@@ -33,15 +33,25 @@ def process_data(data_frame_1, data_frame_2, lang_names: tuple, feat_flags: list
         data_frame_1 = data_frame_1.map(parse_im)
         data_frame_2 = data_frame_2.map(parse_im)
 
-    if '-r' in feat_flags:
+    if '-rim' in feat_flags:
         data_frame_1 = data_frame_1.map(round_im)
         data_frame_2 = data_frame_2.map(round_im)
 
     if '-s' in feat_flags:
         data_frame_1.to_csv(f"{lang_names[0]}.csv")
         data_frame_2.to_csv(f"{lang_names[1]}.csv")
+    
+    if '-r' in feat_flags:
+        data_frame_1 = data_frame_1.map(round_vals)
+        data_frame_2 = data_frame_2.map(round_vals)
 
     return data_frame_1.compare(data_frame_2, result_names=(lang_names[0], lang_names[1]))
+
+def round_vals(val):
+    """
+    Round values to a specific number of significant digits.  
+    """
+    return round(val, 11)
 
 def parse_im(val):
     """
@@ -75,6 +85,7 @@ if __name__ == '__main__':
 
     # Parse Flags
     # -im       Parses complex numbers
+    # -rim      Round complex numbers to 11 sigs
     # -s        Saves dataframes as csv
     # -r        Round to 11 significant figures
     flags = [str(elem) for elem in sys.argv[3:]]

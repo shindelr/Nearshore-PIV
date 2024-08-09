@@ -28,15 +28,23 @@ function build_grids_2(data)
 end
 
 function regular_interp(samples, xs, ys, XI, YI)
+    # samples = convert(AbstractArray{Float64, 2}, samples)
+    xs = convert(Vector{Float64}, xs)
+    ys = convert(Vector{Float64}, ys)
+    XI = convert(Vector{Float64}, XI)
+    YI = convert(Vector{Float64}, YI)
+
+    @show size(xs) size(ys) size(samples)
+    
     itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
-    itp_results = zeros(Float64, (length(YI), length(XI)))
-    itp_results = [itp(yi, xi) for yi in YI, xi in XI]
-    return itp_results
+    # itp_results = zeros(Float64, (length(YI), length(XI)))
+    # itp_results = [itp(yi, xi) for yi in YI, xi in XI]
+    # return itp_results
 end
 
 function test_interp(data)
     Y, X, YI, XI = build_grids_2(data)
-    itpd_data = regular_interp(datax, X, Y, XI, YI)
+    itpd_data = regular_interp(data, X, Y, XI, YI)
     return itpd_data
 end
 

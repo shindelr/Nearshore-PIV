@@ -33,63 +33,74 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     A = convert(Matrix{Float64}, A)
     B = convert(Matrix{Float64}, B)
 
-    sy, sx = size(A)
-    total_passes = size(wins, 1)
+    # sy, sx = size(A)
+    # total_passes = size(wins, 1)
 
-    # Initial passes are for removing large-scale displacements.  Initialize
-    # displacements (datax,datay) to zero
-    data_dim_1 = floor(Int64, (sy/(wins[1,1] * (1-overlap))))
-    data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
-    datax = zeros(eltype(A), (data_dim_1, data_dim_2))
-    datay = copy(datax)
+    # # Initial passes are for removing large-scale displacements.  Initialize
+    # # displacements (datax,datay) to zero
+    # data_dim_1 = floor(Int64, (sy/(wins[1,1] * (1-overlap))))
+    # data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
+    # datax = zeros(eltype(A), (data_dim_1, data_dim_2))
+    # datay = copy(datax)
     # for i in 1:total_passes - 1
-        i = 1
-        println("Pass ", i, " of ", total_passes )
+    #     i = 1
+    #     println("Pass ", i, " of ", total_passes )
     
-        x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
-        # TESTING 07/17: Success! First iteration is a perfect match!
+    #     x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
+    #     # TESTING 07/17: Success! First iteration is a perfect match!
 
-        datax, datay = localfilt(x, y, datax, datay, sensit)
-        # TESTING 07/29: Success! First iteration perfect match. 
-        # writedlm("tests/juliaOut/multipass_loop/localfilt_datax.csv", datax, ',')
-        # writedlm("tests/juliaOut/multipass_loop/localfilt_datay.csv", datay, ',')
+    #     datax, datay = localfilt(x, y, datax, datay, sensit)
+    #     # TESTING 07/29: Success! First iteration perfect match. 
+    #     # writedlm("tests/juliaOut/multipass_loop/localfilt_datax.csv", datax, ',')
+    #     # writedlm("tests/juliaOut/multipass_loop/localfilt_datay.csv", datay, ',')
 
-        # Not currently working on second iteration? Just using og, works great.
-        # datax = naninterp(datax, i)
-        # datay = naninterp(datay, i)
+    #     # Not currently working on second iteration? Just using og, works great.
+    #     # datax = naninterp(datax, i)
+    #     # datay = naninterp(datay, i)
 
-        #     # OG MATLAB IMPLEMENTATION
-        datax, datay = linear_naninterp(datax, datay)
-        # TESTING 07/29: Down to a single difference after flooring below!!
+    #     #     # OG MATLAB IMPLEMENTATION
+    #     datax, datay = linear_naninterp(datax, datay)
+    #     # TESTING 07/29: Down to a single difference after flooring below!!
 
-        println("Writing CSVs")
-        datax = floor.(Int, datax)
-        datay = floor.(Int, datay)
-        writedlm("tests/juliaOut/datax.csv", datax, ',')
-        writedlm("tests/juliaOut/datay.csv", datay, ',')
-
-
-        if i != total_passes - 1
-            Y, X, YI, XI = build_grids_2(datax)
-            datax = round.(regular_interp(datax, X, Y, XI, YI))
-            datay = round.(regular_interp(datay, X, Y, XI, YI))
+    #     println("Writing CSVs")
+    #     datax = floor.(Int, datax)
+    #     datay = floor.(Int, datay)
+    #     writedlm("tests/juliaOut/datax.csv", datax, ',')
+    #     writedlm("tests/juliaOut/datay.csv", datay, ',')
 
 
-            # TESTING 07/29: Showing 127 different rows on initial testing after
-            #               finally fixing localfilt. 
-            # writedlm("tests/juliaOut/multipass_loop/interp_datax.csv", datax, ',')
-            # writedlm("tests/juliaOut/multipass_loop/interp_datay.csv", datay, ',')
+    #     if i != total_passes - 1
+    #         Y, X, YI, XI = build_grids_2(datax)
+    #         datax = round.(regular_interp(datax, X, Y, XI, YI))
+    #         datay = round.(regular_interp(datay, X, Y, XI, YI))
 
-        end
+
+    #         # TESTING 07/29: Showing 127 different rows on initial testing after
+    #         #               finally fixing localfilt. 
+    #         # writedlm("tests/juliaOut/multipass_loop/interp_datax.csv", datax, ',')
+    #         # writedlm("tests/juliaOut/multipass_loop/interp_datay.csv", datay, ',')
+
+    #     end
     # end
 
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
     # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
 
-    # println("Final Pass")
+    println("Final Pass")
+    # Read in matlab csv to skip interpolation problem above and test final pass.
+    datax = readdlm("tests/mlabOut/penultimate_datax.csv", ',', Float64)
+    datay = readdlm("tests/mlabOut/penultimate_datay.csv", ',', Float64)
 
     # TODO: THIS WHOLE FUNCTION NEEDS TESTING. NOT CURRENTLY READY
-    # x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
+    x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
+
+    # FINAL PASS TESTING 08-09
+    # writedlm("tests/juliaOut/finalpass/x.csv", x, ',')        EQUIVALENT
+    # writedlm("tests/juliaOut/finalpass/y.csv", y, ',')        EQUIVALENT
+    # writedlm("tests/juliaOut/finalpass/u.csv", u, ',')        28 diff rows
+    # writedlm("tests/juliaOut/finalpass/v.csv", v, ',')        25 diff rows
+    # writedlm("tests/juliaOut/finalpass/SnR.csv", SnR, ',')    41 diff rows
+    # writedlm("tests/juliaOut/finalpass/Pkh.csv", Pkh, ',')    4 diff rows
 
     # Dummy values
     x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
@@ -268,9 +279,8 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
     if length(N) == 1
         M = N
     else
-    M = N[1]; N = N[2]
+        M = N[1]; N = N[2]
     end
-
     if pad
         pad_matrix = pad_for_xcorr(A[1:convert(Int, M), 1:convert(Int, N)])
         P = plan_fft(pad_matrix; flags=FFTW.MEASURE)
@@ -329,6 +339,7 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
 
             E = E.-mean(E); F = D2.-mean(D2)
 
+            # TESTING: R equivalency at cj && ci == 1
             # Cross correlate and FFT
             if pad
                 R = xcorrf2(E, F, P, true) ./ ( N * M * stad1 * stad2)
@@ -350,9 +361,9 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                     max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
                 end
 
-                if length(max_coords) == 0
-                    @show max max_coords
-                end
+                # if length(max_coords) == 0
+                #     @show max max_coords
+                # end
 
 
                 # Handle a vector that has multiple maximum coordinates.
@@ -395,41 +406,57 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 
                 R2 = copy(R)
 
+                # TESTING: Equivalent at cj && ci == 1
                 # This section had a note to try to simplify their try-catch
-                # clause by using a distance check. TODO:TESTING
+                # clause by using a distance check.
                 if max_y1 > 3 && max_x1 > 3
                     R2[max_y1 - 3:max_y1 + 3, max_x1 - 3: max_x1 + 3] .= NaN
                 else
                     R2[max_y1 - 1: max_y1 + 1, max_x1 - 1: max_x1 + 1] .= NaN
                 end
 
-                # TODO: TESTING
-                if size(R, 1) == N - 1
-                    max_val = maximum(R2)
-                    p2_y2, p2_x2 = findall(x -> x == max_val, R2)[1]
-                else
-                    subset = R2[floor(Int, 0.5 * N):floor(Int, 1.5 * N - 1), 
-                                floor(Int, 0.5 * M):floor(Int, 1.5 * M - 1)]
-                    subset_max_val = maximum(subset)
-                    max_coords = findall(x -> x == subset_max_val, subset)
-                    max_coords = [(i[1] + Int(0.5 * N + 1), 
-                                   i[2] + Int(0.5 * M + 1))
-                                   for i in max_coords]
+                if cj == 1 && ci == 1
+                    # writedlm("tests/juliaOut/finalpass/subset.csv", subset,',')
                 end
 
                 # TODO: TESTING
-                if length(max_coords) > 1
+                if size(R, 1) == (N - 1)
+                    max_val = maximum(R2)
+                    p2_y2, p2_x2 = findall(x -> x == max_val, R2)[1]
+                else
+                    # Find subset of R2 and remember where all !NaN vals are for later reindexing
+                    subset = R2[floor(Int, 0.5 * N):floor(Int, 1.5 * N - 1), 
+                                floor(Int, 0.5 * M):floor(Int, 1.5 * M - 1)]
+                    non_nans = findall(x -> !isnan(x), subset)
+
+                    # Filter out all non-NaN values to find the maximum
+                    # NaN vals contaminate arrays for the min/max functions
+                    filt_subset = filter(!isnan, subset)
+                    subset_max_val = maximum(filt_subset)
+                    max_coords = findall(x -> x == subset_max_val, filt_subset)
+                    
+                    # Re-adjust coordinates to match original coords in R2
+                    og_max_coords = non_nans[max_coords]
+                    max_coords = [(i[1] + floor(Int, 0.5 * N - 1), 
+                                   i[2] + floor(Int, 0.5 * M - 1))
+                                   for i in og_max_coords]
+                end
+
+                # TODO: TESTING
+                if length(max_coords) == 1
+                    p2_y2, p2_x2 = max_coords[1]
+                elseif length(max_coords) > 1
                     p2_x2 = round(length(max_coords) ./ 2)
                     p2_y2 = round(length(max_coords) ./ 2)
                 elseif isempty(max_coords)
-                    # ?
+                    error("Empty set found in Final Pass")
                 end
 
                 # TODO: TESTING
                 snr = R[max_y1, max_x1] / R2[p2_y2, p2_x2]
                 SnR[cj, ci] = snr
-                up[cj, ci] = (-x0 + idx[cj, ci]) / Dt
-                vp[cj, ci] = (-y0 + idy[cj, ci]) / Dt
+                up[cj, ci] = (-x_0 + idx[cj, ci]) / Dt
+                vp[cj, ci] = (-y_0 + idy[cj, ci]) / Dt
                 xp[cj, ci] = ii + (M / 2) - 1
                 yp[cj, ci] = jj + (N / 2) - 1
                 Pkh[cj, ci] = R[max_y1, max_x1]
@@ -447,6 +474,7 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
         cj += 1
     end
     println("Leaving Final Pass")
+    return xp, yp, up, vp, SnR, Pkh
 end
 
 

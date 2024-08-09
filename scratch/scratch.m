@@ -138,6 +138,7 @@ for jj=1:((1-ol)*N):sy-N+1
       
       % calculate signal to noise ratio
       R2=R;
+      
       try
         %consider changing this from try-catch to a simpler
         %distance check. The key here is the distance tot he
@@ -148,16 +149,22 @@ for jj=1:((1-ol)*N):sy-N+1
         R2(max_y1-1:max_y1+1,max_x1-1:max_x1+1)=NaN;
       end
       
+      
       if size(R,1)==(N-1)
         [p2_y2,p2_x2]=find(R2==max(R2(:)));
       else
         [p2_y2,p2_x2]=find(R2==max(max(R2(0.5*N:1.5*N-1,0.5*M:1.5*M-1))));
+        if cj == 1 && ci == 1
+          disp([p2_y2, p2_x2])
+          % writematrix(R2(0.5*N:1.5*N-1,0.5*M:1.5*M-1), "../tests/mlabOut/finalpass/subset.csv")
+        end
       end
       
       if length(p2_x2)>1
         p2_x2=p2_x2(round(length(p2_x2)/2));
         p2_y2=p2_y2(round(length(p2_y2)/2));
       elseif isempty(p2_x2)
+        disp("Empty set found")
       end
       
       snr=R(max_y1,max_x1)/R2(p2_y2,p2_x2);
@@ -763,70 +770,76 @@ sensit = 3;
 % ------------------------------------------------------------------------------
 % function Multipassx technically
 % Loop disabled for testing
-tic;
-for i=1:iter-1
-  % i = 1;
-  disp(['iter ' num2str(i) ' of ' num2str(iter)]);
-  [x,y,datax,datay] = firstpass(A, B, wins(i, :), overlap, datax, datay);
-  % filename = sprintf('firstpass_datax%d.csv', i);
-  % path = sprintf("../tests/mlabOut/multipass_loop/%s", filename);
-  % writematrix(datax, path);
-  
-  % validation
-  [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
-  % writematrix(datax, "../tests/mlabOut/multipass_loop/localfilt_datax.csv");
-  % writematrix(datay, "../tests/mlabOut/multipass_loop/localfilt_datay.csv");
-  
-  [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
-  
-  datax=floor(datax);
-  datay=floor(datay);
-  % writematrix(datax, "../tests/mlabOut/multipass_loop/1stpass_linnaninterp_datax.csv");
-  % writematrix(datay, "../tests/mlabOut/multipass_loop/1stpass_linnaninterp_datay.csv");
-  
-  % expand the velocity data to twice the original size
-  if(i~=iter-1)
-    if wins(i,1)~=wins(i+1,1)
-      X=(1:((1-overlap)*2*wins(i+1,1)):sx-2*wins(i+1,1)+1) + wins(i+1,1);
-      XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
-    else
-      XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
-      X=XI;
-    end
-    if wins(i,2)~=wins(i+1,2)
-      Y=(1:((1-overlap)*2*wins(i+1,2)):sy-2*wins(i+1,2)+1) + wins(i+1,2);
-      YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
-    else
-      YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
-      Y=YI;
-    end
-    
-    datax=round(interp2(X, Y', datax, XI, YI'));
-    datay=round(interp2(X, Y', datay, XI, YI'));
-    
-    [datax,datay]=naninterp(datax, datay, 'linear', [], ...
-      repmat(XI, size(datax, 1), 1), ...
-      repmat(YI', 1, size(datax, 2)) ...
-      );
-    
-    datax=round(datax);
-    datay=round(datay);
-    
-    % writematrix(datax, "../tests/mlabOut/multipass_loop/reginterp_datax.csv");
-    % writematrix(datay, "../tests/mlabOut/multipass_loop/reginterp_datay.csv");
-    disp([size(datax), size(datay)])
-  end
-  
-end
-% writematrix(datax, "../tests/mlabOut/multipass_loop/penultimate_datax.csv");
-% writematrix(datay, "../tests/mlabOut/multipass_loop/penultimate_datay.csv");
+% tic;
+% for i=1:iter-1
+%   % i = 1;
+%   disp(['iter ' num2str(i) ' of ' num2str(iter)]);
+%   [x,y,datax,datay] = firstpass(A, B, wins(i, :), overlap, datax, datay);
+%   % filename = sprintf('firstpass_datax%d.csv', i);
+%   % path = sprintf("../tests/mlabOut/multipass_loop/%s", filename);
+%   % writematrix(datax, path);
 
+%   % validation
+%   [datax,datay]=localfilt(x,y,datax,datay, sensit,'median',3,[]);
+%   % writematrix(datax, "../tests/mlabOut/multipass_loop/localfilt_datax.csv");
+%   % writematrix(datay, "../tests/mlabOut/multipass_loop/localfilt_datay.csv");
+
+%   [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
+
+%   datax=floor(datax);
+%   datay=floor(datay);
+%   % writematrix(datax, "../tests/mlabOut/multipass_loop/1stpass_linnaninterp_datax.csv");
+%   % writematrix(datay, "../tests/mlabOut/multipass_loop/1stpass_linnaninterp_datay.csv");
+
+%   % expand the velocity data to twice the original size
+%   if(i~=iter-1)
+%     if wins(i,1)~=wins(i+1,1)
+%       X=(1:((1-overlap)*2*wins(i+1,1)):sx-2*wins(i+1,1)+1) + wins(i+1,1);
+%       XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+%     else
+%       XI=(1:((1-overlap)*wins(i+1,1)):sx-wins(i+1,1)+1)+(wins(i+1,1))/2;
+%       X=XI;
+%     end
+%     if wins(i,2)~=wins(i+1,2)
+%       Y=(1:((1-overlap)*2*wins(i+1,2)):sy-2*wins(i+1,2)+1) + wins(i+1,2);
+%       YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+%     else
+%       YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
+%       Y=YI;
+%     end
+
+%     datax=round(interp2(X, Y', datax, XI, YI'));
+%     datay=round(interp2(X, Y', datay, XI, YI'));
+
+%     [datax,datay]=naninterp(datax, datay, 'linear', [], ...
+%       repmat(XI, size(datax, 1), 1), ...
+%       repmat(YI', 1, size(datax, 2)) ...
+%       );
+
+%     datax=round(datax);
+%     datay=round(datay);
+
+%     % writematrix(datax, "../tests/mlabOut/multipass_loop/reginterp_datax.csv");
+%     % writematrix(datay, "../tests/mlabOut/multipass_loop/reginterp_datay.csv");
+%   end
+
+% end
+% writematrix(datax, "../tests/mlabOut/penultimate_datax.csv");
+% writematrix(datay, "../tests/mlabOut/penultimate_datay.csv");
+%
 % % % Final pass gives displacement to subpixel accuracy
-% disp('Final iteration')
+disp('Final iteration')
 
-% % % Call plan_fft
+datax = readmatrix("../tests/mlabOut/penultimate_datax.csv");
+datay = readmatrix("../tests/mlabOut/penultimate_datay.csv");
 
-% [x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
-toc
+[x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
+writematrix(x, "../tests/mlabOut/finalpass/x.csv");
+writematrix(y, "../tests/mlabOut/finalpass/y.csv");
+writematrix(u, "../tests/mlabOut/finalpass/u.csv");
+writematrix(v, "../tests/mlabOut/finalpass/v.csv");
+writematrix(SnR, "../tests/mlabOut/finalpass/SnR.csv");
+writematrix(Pkh, "../tests/mlabOut/finalpass/Pkh.csv");
+% toc
 
 % ------ TEST ZONE ------

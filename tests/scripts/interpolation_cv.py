@@ -7,47 +7,36 @@ validate an interpolation model defined by a PIV Julia script.
 """
 
 import numpy as np
-# from numpy import nan, ravel
 from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 
 from juliacall import Main as jl
 from juliacall import Pkg
 
-Pkg.add("Interpolations")
+# Pkg.add("Interpolations")
 jl.seval("using Interpolations")
 jl.seval('include("./julia_interp.jl")')
 jl.seval("using .Interp")
+jl_itp = jl.seval("Interp.regular_interp")
+grid_builder = jl.seval("Interp.build_grids_2")
 
-jl_itp = jl.seval("Interp.test_interp")
-
-def cross_validate_jl_itp(data, train_i, test_i):
-    """
-    Call Julia interpolation function in question and perform interpolation
-    on a training data set, then compare the results to the known test set which
-    is masked.
-    """
-    training_set = data.copy()
-    # Flatten training set and mask the test index but first set aside true val
-    y = np.ravel(training_set)[test_i]
-    np.ravel(training_set)[test_i] = np.nan
-
-    itpd = np.array(jl_itp(training_set))
-    y_hat = np.ravel(itpd)[test_i]
-
-    return mean_squared_error(y_hat, y)
-
-
-# Set up fo K-Folds validation
-kf = KFold(n_splits=9)
-mses = []
 data = np.genfromtxt("../../tests/juliaOut/datax.csv", delimiter=',')
+ys, xs, YI, XI = grid_builder(data)
 
-for train_i, test_i in kf.split(np.ravel(data)):
-    print("yess")
+coarse_points = [(y, x, data[j, i])
+                 for j, y in enumerate(ys)
+                 for i, x in enumerate(xs)
+                 ]
 
+train_p, test_p = train_test_split(coarse_points, test_size=0.2, random_state=20)
 
+train_ys = np.unique([p[0] for p in train_p])
+train_xs = np.unique([p[1] for p in train_p])
+print(train_xs.shape)
 
+# dim1 = round(len(ys) * 0.8) if len(train_p) % (len(ys) * .8) == 0 else len(ys)
+# dim2 = round(len(xs) * 0.8) if len(train_p) % (len(xs) * .8) == 0 else len(xs)
+train_vals = np.array([p[2] for p in train_p]).reshape((len(ys), len(xs)))
 
-
-
+# fine_grid_vals = jl_itp(train_vals, train_xs, train_ys, XI, YI)
