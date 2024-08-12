@@ -403,7 +403,19 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                                 R[max_y1 + 1, max_x1],
                                 N
                 )
-                
+
+
+                if cj == 3 && ci == 270
+                    @show max_x1 max_y1 R[max_y1, max_x1] R[max_y1, max_x1 - 1] R[max_y1, max_x1 + 1] R[max_y1 - 1, max_x1] R[max_y1 + 1, max_x1] N
+                end
+
+                # For testing purposes
+                # x_0 = round(x_0, digits = 6)
+                # y_0 = round(y_0, digits = 6)
+                # open("tests/juliaOut/finalpass/intpeak.csv", "a") do io
+                #     write(io, "$cj, $ci, $x_0, $y_0\n")
+                # end
+
                 R2 = copy(R)
 
                 # TESTING: Equivalent at cj && ci == 1
@@ -419,7 +431,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                     # writedlm("tests/juliaOut/finalpass/subset.csv", subset,',')
                 end
 
-                # TODO: TESTING
                 if size(R, 1) == (N - 1)
                     max_val = maximum(R2)
                     p2_y2, p2_x2 = findall(x -> x == max_val, R2)[1]
@@ -442,7 +453,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                                    for i in og_max_coords]
                 end
 
-                # TODO: TESTING
                 if length(max_coords) == 1
                     p2_y2, p2_x2 = max_coords[1]
                 elseif length(max_coords) > 1
@@ -452,7 +462,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                     error("Empty set found in Final Pass")
                 end
 
-                # TODO: TESTING
                 snr = R[max_y1, max_x1] / R2[p2_y2, p2_x2]
                 SnR[cj, ci] = snr
                 up[cj, ci] = (-x_0 + idx[cj, ci]) / Dt

@@ -1,38 +1,38 @@
 function [x0,y0]=intpeak(x1,y1,R,Rxm1,Rxp1,Rym1,Ryp1,method,N)
 if length(N)==2
-  M=N(1); N=N(2);
+    M=N(1); N=N(2);
 else
-  M=N;
+    M=N;
 end
 
 if any(find(([R Rxm1 Rxp1 Rym1 Ryp1])==0))
-  % to avoid Log of Zero warnings
-  disp("Here")
-  method=1;
+    % to avoid Log of Zero warnings
+    disp("Here")
+    method=1;
 end
 
 if method==1
-  x01=(((x1-1)*Rxm1)+(x1*R)+((x1+1)*Rxp1)) / (Rxm1+ R+Rxp1);
-  y01=(((y1-1)*Rym1)+(y1*R)+((y1+1)*Ryp1)) / (Rym1+ R+Ryp1);
-  x0=x01-(M);
-  y0=y01-(N);
+    x01=(((x1-1)*Rxm1)+(x1*R)+((x1+1)*Rxp1)) / (Rxm1+ R+Rxp1);
+    y01=(((y1-1)*Rym1)+(y1*R)+((y1+1)*Ryp1)) / (Rym1+ R+Ryp1);
+    x0=x01-(M);
+    y0=y01-(N);
 elseif method==2
-  x01=x1 + ( (log(Rxm1)-log(Rxp1))/( (2*log(Rxm1))-(4*log(R))+(2*log(Rxp1))) );
-  y01=y1 + ( (log(Rym1)-log(Ryp1))/( (2*log(Rym1))-(4*log(R))+(2*log(Ryp1))) );
-  x0=x01-(M);
-  y0=y01-(N);
+    x01=x1 + ( (log(Rxm1)-log(Rxp1))/( (2*log(Rxm1))-(4*log(R))+(2*log(Rxp1))) );
+    y01=y1 + ( (log(Rym1)-log(Ryp1))/( (2*log(Rym1))-(4*log(R))+(2*log(Ryp1))) );
+    x0=x01-(M);
+    y0=y01-(N);
 elseif method==3
-  x01=x1 + ( (Rxm1-Rxp1)/( (2*Rxm1)-(4*R)+(2*Rxp1)) );
-  y01=y1 + ( (Rym1-Ryp1)/( (2*Rym1)-(4*R)+(2*Ryp1)) );
-  x0=x01-(M);
-  y0=y01-(N);
-  
-  
+    x01=x1 + ( (Rxm1-Rxp1)/( (2*Rxm1)-(4*R)+(2*Rxp1)) );
+    y01=y1 + ( (Rym1-Ryp1)/( (2*Rym1)-(4*R)+(2*Ryp1)) );
+    x0=x01-(M);
+    y0=y01-(N);
+    
+    
 else
-  
-  disp(['Please include your desired peakfitting function; 1 for',...
-    ' 3-point fit, 2 for gaussian fit, 3 for parabolic fit'])
-  
+    
+    disp(['Please include your desired peakfitting function; 1 for',...
+        ' 3-point fit, 2 for gaussian fit, 3 for parabolic fit'])
+    
 end
 
 
@@ -43,17 +43,17 @@ end
 % -----------------------------------------------
 function [xp,yp,up,vp,SnR,Pkh]=finalpass(A,B,N,ol,idx,idy,Dt)
 if length(N)==1
-  M=N;
+    M=N;
 else
-  M=N(1);
-  N=N(2);
+    M=N(1);
+    N=N(2);
 end
 cj=1;
 [sy,sx]=size(A);
 
 % preallocate
 xp=zeros(ceil((size(A,1)-N)/((1-ol)*N))+1, ...
-  ceil((size(A,2)-M)/((1-ol)*M))+1);
+    ceil((size(A,2)-M)/((1-ol)*M))+1);
 yp=xp;
 up=xp;
 vp=xp;
@@ -61,139 +61,150 @@ SnR=xp;
 Pkh=xp;
 % main loop
 for jj=1:((1-ol)*N):sy-N+1
-  ci=1;
-  for ii=1:((1-ol)*M):sx-M+1
-    
-    if isnan(idx(cj,ci))
-      idx(cj,ci)=0;
-    end
-    
-    if isnan(idy(cj,ci))
-      idy(cj,ci)=0;
-    end
-    
-    if jj+idy(cj,ci)<1
-      idy(cj,ci)=1-jj;
-    elseif jj+idy(cj,ci)>sy-N+1
-      idy(cj,ci)=sy-N+1-jj;
-    end
-    
-    if ii+idx(cj,ci)<1
-      idx(cj,ci)=1-ii;
-    elseif ii+idx(cj,ci)>sx-M+1
-      idx(cj,ci)=sx-M+1-ii;
-    end
-    
-    D2=B(jj+idy(cj,ci):jj+N-1+idy(cj,ci),ii+idx(cj,ci):ii+M-1+idx(cj,ci));
-    E=A(jj:jj+N-1, ii:ii+M-1);
-    stad1=std(E(:));
-    stad2=std(D2(:));
-    if stad1==0
-      stad1=1;
-    end
-    if stad2==0
-      stad2=1;
-    end
-    E=E-mean(E(:));
-    F=D2-mean(D2(:));
-    %% E(E<0)=0; F(F<0)=0;
-    
-    % calculate normalized correlation
-    R = xcorrf2(E, F) ./ (N * M * stad1 * stad2);
-    
-    % Find position of maximal value of R
-    if all(~isnan(R(:))) && ~all(R(:)==0)  %~isnan(stad1) & ~isnan(stad2)
-      if size(R,1)==(N-1)
-        [max_y1,max_x1]=find(R==max(R(:)));
-      else
-        [max_y1,max_x1]=find(R==max(max(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))));
-      end
-      
-      if length(max_x1)>1
-        max_x1=round(sum(max_x1.^2) ./ sum(max_x1));
-        max_y1=round(sum(max_y1.^2)./sum(max_y1));
-      end
-      
-      if max_x1 == 1 || max_y1 == 1
-        disp([max_x1, max_y1]);
-      end
-      
-      if max_x1==1
-        max_x1=2;
-      end
-      if max_y1==1
-        max_y1=2;
-      end
-      
-      % if max_x1 ~= 16 && max_y1 ~= 16
-      %   disp([max_x1, max_y1])
-      % end
-      
-      % 3-point peak fit using centroid, gaussian (default)
-      % or parabolic fit
-      [x0 y0]=intpeak(max_x1,max_y1,R(max_y1,max_x1),...
-        R(max_y1,max_x1-1),R(max_y1,max_x1+1),...
-        R(max_y1-1,max_x1),R(max_y1+1,max_x1),2,[M,N]);
-      
-      
-      % calculate signal to noise ratio
-      R2=R;
-      
-      try
-        %consider changing this from try-catch to a simpler
-        %distance check. The key here is the distance tot he
-        %image edge. When peak is close to edge, this NaN
-        %allocation may fail.
-        R2(max_y1-3:max_y1+3,max_x1-3:max_x1+3)=NaN;
-      catch
-        R2(max_y1-1:max_y1+1,max_x1-1:max_x1+1)=NaN;
-      end
-      
-      
-      if size(R,1)==(N-1)
-        [p2_y2,p2_x2]=find(R2==max(R2(:)));
-      else
-        [p2_y2,p2_x2]=find(R2==max(max(R2(0.5*N:1.5*N-1,0.5*M:1.5*M-1))));
-        if cj == 1 && ci == 1
-          disp([p2_y2, p2_x2])
-          % writematrix(R2(0.5*N:1.5*N-1,0.5*M:1.5*M-1), "../tests/mlabOut/finalpass/subset.csv")
+    ci=1;
+    for ii=1:((1-ol)*M):sx-M+1
+        
+        if isnan(idx(cj,ci))
+            idx(cj,ci)=0;
         end
-      end
-      
-      if length(p2_x2)>1
-        p2_x2=p2_x2(round(length(p2_x2)/2));
-        p2_y2=p2_y2(round(length(p2_y2)/2));
-      elseif isempty(p2_x2)
-        disp("Empty set found")
-      end
-      
-      snr=R(max_y1,max_x1)/R2(p2_y2,p2_x2);
-      % signal to mean:
-      % snr=R(max_y1,max_x1)/mean(R(:));
-      % signal to median:
-      % snr=R(max_y1,max_x1)/median(median(R(0.5*N+2:1.5*N-3,...
-      %    0.5*M+2:1.5*M-3)));
-      
-      % store displacements, SnR and Peak Height
-      up(cj,ci)=(-x0+idx(cj,ci))/Dt;
-      vp(cj,ci)=(-y0+idy(cj,ci))/Dt;
-      xp(cj,ci)=(ii+(M/2)-1);
-      yp(cj,ci)=(jj+(N/2)-1);
-      SnR(cj,ci)=snr;
-      Pkh(cj,ci)=R(max_y1,max_x1);
-      
-    else
-      up(cj,ci)=NaN;
-      vp(cj,ci)=NaN;
-      SnR(cj,ci)=NaN;
-      Pkh(cj,ci)=0;
-      xp(cj,ci)=(ii+(M/2)-1);
-      yp(cj,ci)=(jj+(N/2)-1);
+        
+        if isnan(idy(cj,ci))
+            idy(cj,ci)=0;
+        end
+        
+        if jj+idy(cj,ci)<1
+            idy(cj,ci)=1-jj;
+        elseif jj+idy(cj,ci)>sy-N+1
+            idy(cj,ci)=sy-N+1-jj;
+        end
+        
+        if ii+idx(cj,ci)<1
+            idx(cj,ci)=1-ii;
+        elseif ii+idx(cj,ci)>sx-M+1
+            idx(cj,ci)=sx-M+1-ii;
+        end
+        
+        D2=B(jj+idy(cj,ci):jj+N-1+idy(cj,ci),ii+idx(cj,ci):ii+M-1+idx(cj,ci));
+        E=A(jj:jj+N-1, ii:ii+M-1);
+        stad1=std(E(:));
+        stad2=std(D2(:));
+        if stad1==0
+            stad1=1;
+        end
+        if stad2==0
+            stad2=1;
+        end
+        E=E-mean(E(:));
+        F=D2-mean(D2(:));
+        %% E(E<0)=0; F(F<0)=0;
+        
+        % calculate normalized correlation
+        R = xcorrf2(E, F) ./ (N * M * stad1 * stad2);
+        
+        % Find position of maximal value of R
+        if all(~isnan(R(:))) && ~all(R(:)==0)  %~isnan(stad1) & ~isnan(stad2)
+            if size(R,1)==(N-1)
+                [max_y1,max_x1]=find(R==max(R(:)));
+            else
+                [max_y1,max_x1]=find(R==max(max(R(0.5*N+2:1.5*N-3,0.5*M+2:1.5*M-3))));
+            end
+            
+            if length(max_x1)>1
+                max_x1=round(sum(max_x1.^2) ./ sum(max_x1));
+                max_y1=round(sum(max_y1.^2)./sum(max_y1));
+            end
+            
+            if max_x1 == 1 || max_y1 == 1
+                disp([max_x1, max_y1]);
+            end
+            
+            if max_x1==1
+                max_x1=2;
+            end
+            if max_y1==1
+                max_y1=2;
+            end
+            
+            % if max_x1 ~= 16 && max_y1 ~= 16
+            %   disp([max_x1, max_y1])
+            % end
+            
+            % 3-point peak fit using centroid, gaussian (default)
+            % or parabolic fit
+            [x0 y0]=intpeak(max_x1,max_y1,R(max_y1,max_x1),...
+                R(max_y1,max_x1-1),R(max_y1,max_x1+1),...
+                R(max_y1-1,max_x1),R(max_y1+1,max_x1),2,[M,N]);
+            
+            if cj == 3 && ci == 270
+                disp([max_y1, max_x1])
+                disp([max_x1,max_y1,R(max_y1,max_x1),...
+                    R(max_y1,max_x1-1),R(max_y1,max_x1+1),...
+                    R(max_y1-1,max_x1),R(max_y1+1,max_x1),2,[M,N]])
+            end
+            
+            % fid = fopen("../tests/mlabOut/finalpass/intpeak.csv", "a");
+            % fprintf(fid, "%d, %d, %f, %f\n", cj, ci, x0, y0);
+            % fclose(fid);
+            
+            
+            % calculate signal to noise ratio
+            R2=R;
+            
+            try
+                %consider changing this from try-catch to a simpler
+                %distance check. The key here is the distance tot he
+                %image edge. When peak is close to edge, this NaN
+                %allocation may fail.
+                R2(max_y1-3:max_y1+3,max_x1-3:max_x1+3)=NaN;
+            catch
+              R2(max_y1-1:max_y1+1,max_x1-1:max_x1+1)=NaN;
+            end
+            
+            
+            if size(R,1)==(N-1)
+              [p2_y2,p2_x2]=find(R2==max(R2(:)));
+            else
+              [p2_y2,p2_x2]=find(R2==max(max(R2(0.5*N:1.5*N-1,0.5*M:1.5*M-1))));
+              if cj == 1 && ci == 1
+                disp([p2_y2, p2_x2])
+                % writematrix(R2(0.5*N:1.5*N-1,0.5*M:1.5*M-1), "../tests/mlabOut/finalpass/subset.csv")
+              end
+            end
+            
+            if length(p2_x2)>1
+              p2_x2=p2_x2(round(length(p2_x2)/2));
+              p2_y2=p2_y2(round(length(p2_y2)/2));
+            elseif isempty(p2_x2)
+              disp("Empty set found")
+            end
+            
+            snr=R(max_y1,max_x1)/R2(p2_y2,p2_x2);
+            % signal to mean:
+            % snr=R(max_y1,max_x1)/mean(R(:));
+            % signal to median:
+            % snr=R(max_y1,max_x1)/median(median(R(0.5*N+2:1.5*N-3,...
+            %    0.5*M+2:1.5*M-3)));
+            
+            % store displacements, SnR and Peak Height
+            up(cj,ci)=(-x0+idx(cj,ci))/Dt;
+            vp(cj,ci)=(-y0+idy(cj,ci))/Dt;
+            xp(cj,ci)=(ii+(M/2)-1);
+            yp(cj,ci)=(jj+(N/2)-1);
+            SnR(cj,ci)=snr;
+            Pkh(cj,ci)=R(max_y1,max_x1);
+            
+        else
+          up(cj,ci)=NaN;
+          vp(cj,ci)=NaN;
+          SnR(cj,ci)=NaN;
+          Pkh(cj,ci)=0;
+          xp(cj,ci)=(ii+(M/2)-1);
+          yp(cj,ci)=(jj+(N/2)-1);
+        end
+        
+        ci=ci+1;
     end
-    
-    ci=ci+1;
-  end
-  cj=cj+1;
+    cj=cj+1;
 end
 
 % now we inline the function XCORRF2 to shave off some time.
@@ -331,7 +342,6 @@ for jj=1:((1-overlap)*N):sy-N+1
       datax(cj,ci)=NaN; datay(cj,ci)=NaN; ci=ci+1;
     end
   end
-  
   cj=cj+1;
 end
 end
@@ -834,12 +844,12 @@ datax = readmatrix("../tests/mlabOut/penultimate_datax.csv");
 datay = readmatrix("../tests/mlabOut/penultimate_datay.csv");
 
 [x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
-writematrix(x, "../tests/mlabOut/finalpass/x.csv");
-writematrix(y, "../tests/mlabOut/finalpass/y.csv");
-writematrix(u, "../tests/mlabOut/finalpass/u.csv");
-writematrix(v, "../tests/mlabOut/finalpass/v.csv");
-writematrix(SnR, "../tests/mlabOut/finalpass/SnR.csv");
-writematrix(Pkh, "../tests/mlabOut/finalpass/Pkh.csv");
+% writematrix(x, "../tests/mlabOut/finalpass/x.csv");
+% writematrix(y, "../tests/mlabOut/finalpass/y.csv");
+% writematrix(u, "../tests/mlabOut/finalpass/u.csv");
+% writematrix(v, "../tests/mlabOut/finalpass/v.csv");
+% writematrix(SnR, "../tests/mlabOut/finalpass/SnR.csv");
+% writematrix(Pkh, "../tests/mlabOut/finalpass/Pkh.csv");
 % toc
 
 % ------ TEST ZONE ------
