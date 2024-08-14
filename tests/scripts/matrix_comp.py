@@ -51,7 +51,7 @@ def round_vals(val):
     """
     Round values to a specific number of significant digits.  
     """
-    return round(val, 11)
+    return round(val, 9)
 
 def parse_im(val):
     """

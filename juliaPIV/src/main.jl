@@ -94,16 +94,15 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     # TODO: THIS WHOLE FUNCTION NEEDS TESTING. NOT CURRENTLY READY
     x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
 
-    # FINAL PASS TESTING 08-09
-    # writedlm("tests/juliaOut/finalpass/x.csv", x, ',')        EQUIVALENT
-    # writedlm("tests/juliaOut/finalpass/y.csv", y, ',')        EQUIVALENT
-    # writedlm("tests/juliaOut/finalpass/u.csv", u, ',')        28 diff rows
-    # writedlm("tests/juliaOut/finalpass/v.csv", v, ',')        25 diff rows
-    # writedlm("tests/juliaOut/finalpass/SnR.csv", SnR, ',')    41 diff rows
-    # writedlm("tests/juliaOut/finalpass/Pkh.csv", Pkh, ',')    4 diff rows
+    # FINAL PASS TESTING 08-14
+    # writedlm("tests/juliaOut/finalpass/x.csv", x, ',')     # EQUIVALENT @ 11 sig figs
+    # writedlm("tests/juliaOut/finalpass/y.csv", y, ',')     # EQUIVALENT @ 11 sig figs
+    # writedlm("tests/juliaOut/finalpass/u.csv", u, ',')     # 4 diff @ 9 sig figs
+    # writedlm("tests/juliaOut/finalpass/v.csv", v, ',')     # 2 diff @ 9 sig figs
+    # writedlm("tests/juliaOut/finalpass/SnR.csv", SnR, ',') # 1 diff @ 8 sig figs
+    # writedlm("tests/juliaOut/finalpass/Pkh.csv", Pkh, ',') # 1 diff @ 10 sig figs
 
     # Dummy values
-    x=0; y=0; u=0; v=0; SnR=0; Pkh=0;
     return x, y, u, v, SnR, Pkh
 end
 
@@ -340,6 +339,7 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
             E = E.-mean(E); F = D2.-mean(D2)
 
             # TESTING: R equivalency at cj && ci == 1
+            #                           cj && ci == 196, 46
             # Cross correlate and FFT
             if pad
                 R = xcorrf2(E, F, P, true) ./ ( N * M * stad1 * stad2)
@@ -351,20 +351,17 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
 
                 # Find position of maximal value of R
                 if size(R, 1) == (N - 1)
-                    max = maximum(R)
-                    max_coords = findall(x -> x == max, R)
+                    max_coords = findall(x -> x == maximum(R), R)
                 else
                     subset = R[Int(floor(.5 * N + 2)):Int(floor(1.5 * N - 3)), 
                                 Int(floor(.5 * M + 2)):Int(floor(1.5 * M - 3))]
-                    max = maximum(subset)
-                    max_coords = findall(x -> x == max, subset)
+                    max_coords = findall(x -> x == maximum(subset), subset)
                     max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
                 end
 
-                # if length(max_coords) == 0
-                #     @show max max_coords
-                # end
-
+                # A COUPLE OF ITERATIONS ARE ONLY FINDING A SINGLE MAXIMUM COORD
+                # WHEN THERE SHOULD BE 2 ACCORDING TO MLAB. THIS COULD BE WHERE
+                # THE SLIGHT ERRORS ARE COMING FROM.
 
                 # Handle a vector that has multiple maximum coordinates.
                 # Sum the product of each x and y indice with its own indice within
@@ -392,8 +389,8 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 if max_y1 == 1
                     max_y1 = 2
                 end
-                
-                # Runs without error, TODO:TESTING
+
+                # Runs without error, seems to be equivalent.
                 # 3-point peak fit using gaussian fit
                 x_0, y_0 = intpeak(max_x1, max_y1, 
                                 R[max_y1, max_x1],
@@ -404,31 +401,13 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                                 N
                 )
 
-
-                if cj == 3 && ci == 270
-                    @show max_x1 max_y1 R[max_y1, max_x1] R[max_y1, max_x1 - 1] R[max_y1, max_x1 + 1] R[max_y1 - 1, max_x1] R[max_y1 + 1, max_x1] N
-                end
-
-                # For testing purposes
-                # x_0 = round(x_0, digits = 6)
-                # y_0 = round(y_0, digits = 6)
-                # open("tests/juliaOut/finalpass/intpeak.csv", "a") do io
-                #     write(io, "$cj, $ci, $x_0, $y_0\n")
-                # end
-
                 R2 = copy(R)
-
-                # TESTING: Equivalent at cj && ci == 1
                 # This section had a note to try to simplify their try-catch
                 # clause by using a distance check.
                 if max_y1 > 3 && max_x1 > 3
                     R2[max_y1 - 3:max_y1 + 3, max_x1 - 3: max_x1 + 3] .= NaN
                 else
                     R2[max_y1 - 1: max_y1 + 1, max_x1 - 1: max_x1 + 1] .= NaN
-                end
-
-                if cj == 1 && ci == 1
-                    # writedlm("tests/juliaOut/finalpass/subset.csv", subset,',')
                 end
 
                 if size(R, 1) == (N - 1)
@@ -482,7 +461,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
         end
         cj += 1
     end
-    println("Leaving Final Pass")
     return xp, yp, up, vp, SnR, Pkh
 end
 
@@ -1028,6 +1006,28 @@ function main(A, B)
     # other input params for piv
     dt = 1; overlap = 0.5; validvec = 3
     @time x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
+
+    # Save original results prior to quality control
+    uraw = u
+    vraw = v
+
+    # snrfilt: reject data with too-low signal-to-noise level
+    # TESTING: 1 diff @ 9 sig figs
+    snrthresh = 1.3
+    ibad = findall(x -> x < snrthresh, SnR)
+    u[ibad] .= NaN
+    v[ibad] .= NaN
+
+    # peakfilt: reject data with too-low correlation peak height
+    # TESTING: EQUIVALENT @ 9 sig figs
+    pkhthresh = 0.3
+    ibad = findall(x -> x < pkhthresh, Pkh)
+    u[ibad] .= NaN
+    v[ibad] .= NaN
+
+    # globfilt: reject data that disagree strongly with their neighbors in a
+    # local window
+    u, v = globfilt(x, y, u, v, 3)
 
     println("\n===============\nExiting now\n===============")
 end
