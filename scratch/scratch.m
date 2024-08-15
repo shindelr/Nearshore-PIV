@@ -1,3 +1,137 @@
+function [hu,hv]=globfilt(x,y,u,v,varargin)
+if nargin < 5
+  disp('Not enough input arguments!'); return
+end
+tm=cellfun('isclass',varargin,'double');
+pa=find(tm==1);
+if length(pa)>1
+  disp('Only one numeric input allowed!'); return
+end
+fprintf(' Global filter running - ')
+if max(sqrt(u(:).^2+v(:).^2))~=0
+  scale=2/max(sqrt(u(:).^2+v(:).^2));
+else
+  scale=0.1;
+end
+if any(strcmp(varargin,'manual')) & ~any(strcmp(varargin,'loop'))
+  figure, subplot(211),vekplot2(x,y,u,v,scale);
+  subplot(212),plot(u,v,'.'), title('scatter plot of velocities')
+  xlabel('worldcoordinates per second')
+  ylabel('worldcoordinates per second')
+  disp('Use left button to mark the 4 corners around your region...')
+  hold on
+  for i=1:4
+    [ii(i),jj(i)]=ginput(1);
+    if i>1
+      h1=plot([ii(i-1) ii(i)],[jj(i-1) jj(i)],'k-');
+      set(h1,'LineWidth',[2]);
+    end
+  end
+  h2=plot([ii(4) ii(1)],[jj(4) jj(1)],'k-');
+  set(h2,'LineWidth',[2]);
+  clear in; in=inpolygon(u,v,ii,jj);
+  subplot(211), hold on
+  vekplot2(x,y,u,v,scale,'b');
+  vekplot2(x(~in),y(~in),u(~in),v(~in),scale,'r');
+  drawnow
+elseif any(strcmp(varargin,'loop')) & ~any(strcmp(varargin,'manual'))
+  usr=1;
+  if ~isempty(pa)
+    param=cat(1,varargin{pa});
+    %param=cell2mat(varargin(pa));
+  else
+    param=3;
+    disp('Warning! no threshold specified. Using standard setting.')
+  end
+  xo=mnanmean(u(:)); yo=mnanmean(v(:));
+  while param~=0,
+    sx=param*mnanstd(u(:)); sy=param*mnanstd(v(:));
+    if ~any(strcmp(varargin,'circle'))
+      ii=[xo+sx; xo+sx; xo-sx; xo-sx];
+      jj=[yo+sy; yo-sy; yo-sy; yo+sy];
+    else
+      ttt=0:0.1:2*pi;
+      ii=xo+sx*sin(ttt); jj=yo+sy*cos(ttt); ii=ii(:); jj=jj(:);
+    end
+    figure(gcf), subplot(211),vekplot2(x,y,u,v,scale);
+    subplot(212), plot(u,v,'.'), hold on, plot(ii,jj,'-')
+    plot([ii(1) ii(4)],[jj(4) jj(4)],'-'),  hold off
+    clear in; in=inpolygon(u,v,ii,jj);
+    subplot(211), hold on
+    vekplot2(x,y,u,v,scale,'b');
+    vekplot2(x(~in),y(~in),u(~in),v(~in),scale,'r');
+    fprintf(['with limit: ',num2str(param),...
+      ' *std [U V]'])
+    param=input(['To change THRESHOLD type new value, \n type 0 to use current value >> ']);
+    
+  end
+  close
+elseif any(cellfun('isclass',varargin,'double')==1)& ~any(strcmp(varargin,'loop'))
+  param=cat(1,varargin{pa});
+  %param=cell2mat(varargin(pa));
+  if length(param)==1
+    sx=param*mnanstd(u(:));
+    sy=param*mnanstd(v(:));
+    
+    xo=mnanmean(u(:));
+    yo=mnanmean(v(:));
+    
+    if ~any(strcmp(varargin,'circle'))
+      ii=[xo+sx; xo+sx; xo-sx; xo-sx];
+      jj=[yo+sy; yo-sy; yo-sy; yo+sy];
+      % else
+      %   ttt=0:0.1:2*pi;
+      %   ii=xo+sx*sin(ttt); jj=yo+sy*cos(ttt); ii=ii(:); jj=jj(:);
+    end
+    fprintf(['with limit: ',num2str(param),...
+      ' *std [U V]'])
+    %close
+    % elseif length(param)==4
+    %   sx(1)=param(1); sy(1)=param(3);
+    %   sx(2)=param(2); sy(2)=param(4);
+    %   ii=[sx(1); sx(2); sx(2); sx(1)];
+    %   jj=[sy(1); sy(1); sy(2); sy(2)];
+    %   fprintf(['Current limit: [',num2str(param),'] = (umin,umax,vmin,vmax)'])
+    % else
+    %   fprintf('Something wrong with your numerical input')
+  end
+  % else
+  %   disp('Error! Check your input to GLOBFILT')
+  %   %close
+  %   return
+end
+prev=isnan(u); previndx=find(prev==1);
+%Locate points inside chosen area
+in=inpolygon(u,v,ii,jj);
+disp(in)
+nx=x(~in); ny=y(~in);
+nu=u(~in); nv=v(~in);
+
+% %scale=3/max(sqrt(u(:).^2+v(:).^2));
+% if any(strcmp(varargin,'manual')==1) | any(strcmp(varargin,'loop')==1)
+%   figure, vekplot2(x(:).',y(:).',u(:).',v(:).',scale,'b');
+%   hold on, grid on
+%   vekplot2(nx(:).',ny(:).',nu(:).',nv(:).',scale,'r');
+%   xlabel([num2str(length(nx(:))-length(previndx(:))),...
+%     ' outliers identified by this filter, from totally ',...
+%     num2str(length(u(:))),' vectors'])
+% end
+% %Exclude points outside area
+% u(~in)=NaN; v(~in)=NaN;
+% %interpolate
+% if any(strcmp(varargin,'interp')==1)
+%   if any(isnan(u(:)))
+%     [u,v]=naninterp2(u,v);
+%     vekplot2(x,y,u,v,scale,'g');
+%     title('Green arrows are validated and interpolated vector field')
+%   end
+% end
+% fprintf([' ..... ',num2str(length(nx(:))-length(previndx(:))),...
+%       ' vectors changed\n'])
+% hu=u; hv=v;
+end
+% -----------------------------------------------
+% -----------------------------------------------
 function [x0,y0]=intpeak(x1,y1,R,Rxm1,Rxp1,Rym1,Ryp1,method,N)
 if length(N)==2
   M=N(1); N=N(2);
@@ -852,9 +986,8 @@ sensit = 3;
 %
 % % % Final pass gives displacement to subpixel accuracy
 disp('Final iteration')
-
-datax = readmatrix("../tests/mlabOut/penultimate_datax.csv");
-datay = readmatrix("../tests/mlabOut/penultimate_datay.csv");
+datax = readmatrix("/tests/mlabOut/penultimate_datax.csv");
+datay = readmatrix("/tests/mlabOut/penultimate_datay.csv");
 
 [x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);
 % writematrix(x, "../tests/mlabOut/finalpass/x.csv");

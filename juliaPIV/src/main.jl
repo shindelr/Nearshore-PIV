@@ -9,6 +9,7 @@ using Skipper         # Special skipping library to skip NaNs and other things
 using Interpolations
 using ScatteredInterpolation
 using Plots
+using Luxor
 
 # PASS FUNCTIONS 
 """
@@ -723,6 +724,20 @@ function regular_interp(samples, xs, ys, XI, YI)
     return itp_results
 end
 
+"""
+    build_grids_2(data)
+
+Builds coarse and fine grids based on the given data.
+
+# Arguments
+- `data`: A 2-dimensional array representing the data.
+
+# Returns
+- `coarse_ys`: A 1-dimensional array representing the coarse grid in the y-direction.
+- `coarse_xs`: A 1-dimensional array representing the coarse grid in the x-direction.
+- `fine_YI`: A 1-dimensional array representing the fine grid in the y-direction.
+- `fine_XI`: A 1-dimensional array representing the fine grid in the x-direction.
+"""
 function build_grids_2(data)
     coarse_y_dim = size(data, 1)
     coarse_x_dim = size(data, 2)
@@ -772,6 +787,37 @@ function build_grids(wins, overlap, sx, sy, i)
         end
 
     return X, Y, XI, YI
+end
+
+function globfilt(x, y, u, v)
+    println("Global filter running - with limit: 3 * std [U V]")
+    # Opportunity for perfomance improvement here.
+    nan_filt_u = filter(!isnan, u)
+    nan_filt_v = filter(!isnan, v)
+    scale_test = maximum(sqrt.(nan_filt_u[:].^2 + nan_filt_v[:].^2))
+    if scale_test != 0
+        scale = 2 / scale_test
+    else
+        scale = 0.1
+    end
+
+    sx = 3 * nan_std(u[:]); sy = 3 * nan_std(v[:])
+    xo = nan_mean(u[:]); yo = nan_mean(v[:])
+    ii = [xo + sx; xo + sx; xo - sx; xo - sx]
+    jj = [yo + sy; yo - sy; yo - sy; yo + sy]
+
+    prev_index = findall(x -> isnan(x), u)
+    # Locate points inside chosen area
+
+    # LEFT OFF HERE!! TRYING TO FIGURE OUT HOW TO MAKE THE POLYGON
+    # AND THEN DECIDE WHICH POINTS IN U AND V LIE INSIDE OF IT.
+    polygon = Point.(ii, jj)
+    points = vec(Point.(u[:], v[:]))
+    in = [isinside(p, polygon; allowonedge=false) for p in points]
+
+
+
+    return 0, 0
 end
 
 """
@@ -976,6 +1022,46 @@ function im_std(collection)
     return NaN
 end
 
+"""
+    nan_std(collection)
+
+Compute the standard deviation of a collection, excluding any NaN values.
+
+# Arguments
+- `collection`: The collection of values.
+
+# Returns
+The standard deviation of the collection, excluding NaN values. 
+If the collection is empty or contains only NaN values, NaN is returned.
+"""
+function nan_std(collection)
+    i = filter(x -> !isnan(x), collection)
+    if length(i) > 0
+        return std(i, corrected=false)
+    end
+    return NaN
+end
+
+"""
+    nan_mean(collection)
+
+Compute the mean of a collection, excluding any NaN values.
+
+# Arguments
+- `collection`: A collection of values.
+
+# Returns
+- The mean of the collection, excluding NaN values. If the collection is 
+empty or contains only NaN values, NaN is returned.
+"""
+function nan_mean(collection)
+    i = filter(x -> !isnan(x), collection)
+    if length(i) > 0
+        return mean(i)
+    end
+    return NaN
+end
+
 
 # MAIN
 """
@@ -1027,7 +1113,7 @@ function main(A, B)
 
     # globfilt: reject data that disagree strongly with their neighbors in a
     # local window
-    u, v = globfilt(x, y, u, v, 3)
+    u, v = globfilt(x, y, u, v)
 
     println("\n===============\nExiting now\n===============")
 end
