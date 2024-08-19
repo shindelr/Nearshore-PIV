@@ -10,6 +10,7 @@ using Interpolations
 using ScatteredInterpolation
 using Plots
 using Luxor
+# using GeometryBasics
 
 # PASS FUNCTIONS 
 """
@@ -725,18 +726,20 @@ function regular_interp(samples, xs, ys, XI, YI)
 end
 
 """
-    build_grids_2(data)
+        build_grids_2(data)
 
-Builds coarse and fine grids based on the given data.
+    Builds coarse and fine grids based on the given data.
 
-# Arguments
-- `data`: A 2-dimensional array representing the data.
+    Arguments
+    ---------
+    `data`: A 2-dimensional array representing the data.
 
-# Returns
-- `coarse_ys`: A 1-dimensional array representing the coarse grid in the y-direction.
-- `coarse_xs`: A 1-dimensional array representing the coarse grid in the x-direction.
-- `fine_YI`: A 1-dimensional array representing the fine grid in the y-direction.
-- `fine_XI`: A 1-dimensional array representing the fine grid in the x-direction.
+    Returns
+    ---------
+    `coarse_ys`: A 1-dimensional array representing the coarse grid in the y-direction.
+    `coarse_xs`: A 1-dimensional array representing the coarse grid in the x-direction.
+    `fine_YI`: A 1-dimensional array representing the fine grid in the y-direction.
+    `fine_XI`: A 1-dimensional array representing the fine grid in the x-direction.
 """
 function build_grids_2(data)
     coarse_y_dim = size(data, 1)
@@ -789,7 +792,27 @@ function build_grids(wins, overlap, sx, sy, i)
     return X, Y, XI, YI
 end
 
-function globfilt(x, y, u, v)
+"""
+        globfilt(u, v)
+
+    Global histogram operator. Find the maximum and minimum velocities allowed 
+    vector fields u and v. 
+
+    Arguments
+    ---------
+        `u`: A 2-dimensional array representing the u-component of the vector field.
+        `v`: A 2-dimensional array representing the v-component of the vector field.
+
+    Returns
+    ---------
+        `u`: A 2-dimensional array representing the filtered u-component.
+        `v`: A 2-dimensional array representing the filtered v-component.
+
+    Original Author:
+    1999 -2014 copyright J.K.Sveen jks@math.uio.no
+    Dept. of Mathematics, Mechanics Division, University of Oslo, Norway
+"""
+function globfilt(u, v)
     println("Global filter running - with limit: 3 * std [U V]")
     # Opportunity for perfomance improvement here.
     nan_filt_u = filter(!isnan, u)
@@ -806,18 +829,29 @@ function globfilt(x, y, u, v)
     ii = [xo + sx; xo + sx; xo - sx; xo - sx]
     jj = [yo + sy; yo - sy; yo - sy; yo + sy]
 
-    prev_index = findall(x -> isnan(x), u)
+    # This line isn't necessary for non-manual filtration
+    # prev_index = findall(x -> isnan(x), u)
+    
+    # TESTING: Success! in is equivalent to matlab  08/19
+    # writedlm("tests/juliaOut/IN.csv", in, ',')
+
     # Locate points inside chosen area
+    poly_points = Point.(ii, jj)  # Define polygon
+    points = vec(Point.(u, v))    # Convert u, v to Points for isinside
+    in = [isinside(p, poly_points) for p in points]  # Check if points are inside polygon
 
-    # LEFT OFF HERE!! TRYING TO FIGURE OUT HOW TO MAKE THE POLYGON
-    # AND THEN DECIDE WHICH POINTS IN U AND V LIE INSIDE OF IT.
-    polygon = Point.(ii, jj)
-    points = vec(Point.(u[:], v[:]))
-    in = [isinside(p, polygon; allowonedge=false) for p in points]
+    # This line isn't necessary for non-manual filtration
+    # nx = x[.!in]; ny = y[.!in]; nu = u[.!in]; nv = v[.!in]
+    # writedlm("tests/juliaOut/nx.csv", nx, ',')   # Equivalent
+    # writedlm("tests/juliaOut/ny.csv", ny, ',')   # Equivalent
+    # writedlm("tests/juliaOut/nu.csv", nu, ',')   # Equiv to 10 sig figs
+    # writedlm("tests/juliaOut/nv.csv", nv, ',')   # Equiv to 9 sig figs
+    
+    u[.!in] .= NaN; v[.!in] .= NaN
+    # writedlm("tests/juliaOut/u.csv", u, ',')
+    # writedlm("tests/juliaOut/v.csv", v, ',')
 
-
-
-    return 0, 0
+    return u, v
 end
 
 """
@@ -1023,16 +1057,18 @@ function im_std(collection)
 end
 
 """
-    nan_std(collection)
+        nan_std(collection)
 
-Compute the standard deviation of a collection, excluding any NaN values.
+    Compute the standard deviation of a collection, excluding any NaN values.
 
-# Arguments
-- `collection`: The collection of values.
+    Arguments
+    ---------
+        `collection`: The collection of values.
 
-# Returns
-The standard deviation of the collection, excluding NaN values. 
-If the collection is empty or contains only NaN values, NaN is returned.
+    Returns
+    ---------
+        The standard deviation of the collection, excluding NaN values. If the 
+        collection is empty or contains only NaN values, NaN is returned.
 """
 function nan_std(collection)
     i = filter(x -> !isnan(x), collection)
@@ -1113,7 +1149,10 @@ function main(A, B)
 
     # globfilt: reject data that disagree strongly with their neighbors in a
     # local window
-    u, v = globfilt(x, y, u, v)
+    u, v = globfilt(u, v)
+    # TESTING: EQUIVALENT @ 9 sig figs  08/19
+    # writedlm("tests/juliaOut/main_u.csv", u, ',')
+    # writedlm("tests/juliaOut/main_v.csv", v, ',')
 
     println("\n===============\nExiting now\n===============")
 end

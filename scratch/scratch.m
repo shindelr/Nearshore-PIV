@@ -103,12 +103,18 @@ end
 prev=isnan(u); previndx=find(prev==1);
 %Locate points inside chosen area
 in=inpolygon(u,v,ii,jj);
-disp(in)
 nx=x(~in); ny=y(~in);
 nu=u(~in); nv=v(~in);
 
-% %scale=3/max(sqrt(u(:).^2+v(:).^2));
+% writematrix(nx, "tests/mlabOut/nx.csv");
+% writematrix(ny, "tests/mlabOut/ny.csv");
+% writematrix(nu, "tests/mlabOut/nu.csv");
+% writematrix(nv, "tests/mlabOut/nv.csv");
+
+
+%scale=3/max(sqrt(u(:).^2+v(:).^2));
 % if any(strcmp(varargin,'manual')==1) | any(strcmp(varargin,'loop')==1)
+%   disp("Made it 117")
 %   figure, vekplot2(x(:).',y(:).',u(:).',v(:).',scale,'b');
 %   hold on, grid on
 %   vekplot2(nx(:).',ny(:).',nu(:).',nv(:).',scale,'r');
@@ -116,19 +122,22 @@ nu=u(~in); nv=v(~in);
 %     ' outliers identified by this filter, from totally ',...
 %     num2str(length(u(:))),' vectors'])
 % end
-% %Exclude points outside area
-% u(~in)=NaN; v(~in)=NaN;
-% %interpolate
-% if any(strcmp(varargin,'interp')==1)
-%   if any(isnan(u(:)))
-%     [u,v]=naninterp2(u,v);
-%     vekplot2(x,y,u,v,scale,'g');
-%     title('Green arrows are validated and interpolated vector field')
-%   end
-% end
-% fprintf([' ..... ',num2str(length(nx(:))-length(previndx(:))),...
-%       ' vectors changed\n'])
-% hu=u; hv=v;
+%Exclude points outside area
+u(~in)=NaN; v(~in)=NaN;
+% writematrix(u, "tests/mlabOut/u.csv");
+% writematrix(v, "tests/mlabOut/v.csv");
+
+%interpolate
+if any(strcmp(varargin,'interp')==1)
+  if any(isnan(u(:)))
+    [u,v]=naninterp2(u,v);
+    vekplot2(x,y,u,v,scale,'g');
+    title('Green arrows are validated and interpolated vector field')
+  end
+end
+fprintf([' ..... ',num2str(length(nx(:))-length(previndx(:))),...
+  ' vectors changed\n'])
+hu=u; hv=v;
 end
 % -----------------------------------------------
 % -----------------------------------------------
@@ -1017,6 +1026,8 @@ v(ibad)=nan;
 % globfilt: reject data that disagree strongly with its neighbors in a local
 % window
 [u,v]=globfilt(x,y,u,v,3);
+% writematrix(u, "tests/mlabOut/main_u.csv");
+% writematrix(v, "tests/mlabOut/main_v.csv");
 
 
 % ------ TEST ZONE ------
