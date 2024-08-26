@@ -1,5 +1,4 @@
 # Third party modules
-# Allows developers to 
 using Statistics
 using FFTW            # Fast Fourier Transforms library built on C
 using Images          # Basic image processing library
@@ -7,10 +6,9 @@ using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
 using Skipper         # Special skipping library to skip NaNs and other things
 using Interpolations
-using ScatteredInterpolation
+# using ScatteredInterpolation
 using Plots
-using Luxor
-# using GeometryBasics
+using Luxor            # For creating inpolygon() functionality
 
 # PASS FUNCTIONS 
 """
@@ -35,76 +33,53 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
     A = convert(Matrix{Float64}, A)
     B = convert(Matrix{Float64}, B)
 
-    # sy, sx = size(A)
-    # total_passes = size(wins, 1)
+    sy, sx = size(A)
+    total_passes = size(wins, 1)
 
-    # # Initial passes are for removing large-scale displacements.  Initialize
-    # # displacements (datax,datay) to zero
-    # data_dim_1 = floor(Int64, (sy/(wins[1,1] * (1-overlap))))
-    # data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
-    # datax = zeros(eltype(A), (data_dim_1, data_dim_2))
-    # datay = copy(datax)
-    # for i in 1:total_passes - 1
-    #     i = 1
-    #     println("Pass ", i, " of ", total_passes )
+    # Initial passes are for removing large-scale displacements. Initialize
+    # displacements (datax,datay) to zero
+    data_dim_1 = floor(Int64, (sy/(wins[1,1] * (1-overlap))))
+    data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
+    datax = zeros(Float64, (data_dim_1, data_dim_2))
+    datay = copy(datax)
+    for i in 1:total_passes - 1
+        println("Pass ", i, " of ", total_passes )
     
-    #     x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
-    #     # TESTING 07/17: Success! First iteration is a perfect match!
+        x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
 
-    #     datax, datay = localfilt(x, y, datax, datay, sensit)
-    #     # TESTING 07/29: Success! First iteration perfect match. 
-    #     # writedlm("tests/juliaOut/multipass_loop/localfilt_datax.csv", datax, ',')
-    #     # writedlm("tests/juliaOut/multipass_loop/localfilt_datay.csv", datay, ',')
+        datax, datay = localfilt(x, y, datax, datay, sensit)
 
-    #     # Not currently working on second iteration? Just using og, works great.
-    #     # datax = naninterp(datax, i)
-    #     # datay = naninterp(datay, i)
+        datax, datay = linear_naninterp(datax, datay)
+        # writedlm("tests/juliaOut/nanitp_datax$i.csv", datax, ',')
 
-    #     #     # OG MATLAB IMPLEMENTATION
-    #     datax, datay = linear_naninterp(datax, datay)
-    #     # TESTING 07/29: Down to a single difference after flooring below!!
-
-    #     println("Writing CSVs")
-    #     datax = floor.(Int, datax)
-    #     datay = floor.(Int, datay)
-    #     writedlm("tests/juliaOut/datax.csv", datax, ',')
-    #     writedlm("tests/juliaOut/datay.csv", datay, ',')
+        datax = floor.(Int, datax)
+        datay = floor.(Int, datay)
+        # writedlm("tests/juliaOut/datax.csv", datax, ',')
+        # writedlm("tests/juliaOut/datay.csv", datay, ',')
 
 
-    #     if i != total_passes - 1
-    #         Y, X, YI, XI = build_grids_2(datax)
-    #         datax = round.(regular_interp(datax, X, Y, XI, YI))
-    #         datay = round.(regular_interp(datay, X, Y, XI, YI))
+        if i != total_passes - 1
+            Y, X, YI, XI = build_grids_2(datax)
+            # datax = round.(regular_interp(datax, X, Y, XI, YI))
+            # datay = round.(regular_interp(datay, X, Y, XI, YI))
+            datax = regular_interp(datax, X, Y, XI, YI)
+            datay = regular_interp(datay, X, Y, XI, YI)
 
+            # NAN BORDER ATTEMPT ----------------
+            datax = make_nan_border(datax)
+            datay = make_nan_border(datay)
 
-    #         # TESTING 07/29: Showing 127 different rows on initial testing after
-    #         #               finally fixing localfilt. 
-    #         # writedlm("tests/juliaOut/multipass_loop/interp_datax.csv", datax, ',')
-    #         # writedlm("tests/juliaOut/multipass_loop/interp_datay.csv", datay, ',')
-
-    #     end
-    # end
-
-    # writedlm("tests/juliaOut/multipass_loop/penultimate_datax.csv", datax, ',')
-    # writedlm("tests/juliaOut/multipass_loop/penultimate_datay.csv", datay, ',')
+            datax, datay = linear_naninterp(datax, datay)
+            datax = round.(datax)
+            datay = round.(datay)
+            # writedlm("tests/juliaOut/datax$i.csv", datax, ',')
+            # ---------------------------------
+        end
+    end
 
     println("Final Pass")
-    # Read in matlab csv to skip interpolation problem above and test final pass.
-    datax = readdlm("tests/mlabOut/penultimate_datax.csv", ',', Float64)
-    datay = readdlm("tests/mlabOut/penultimate_datay.csv", ',', Float64)
-
-    # TODO: THIS WHOLE FUNCTION NEEDS TESTING. NOT CURRENTLY READY
     x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
 
-    # FINAL PASS TESTING 08-14
-    # writedlm("tests/juliaOut/finalpass/x.csv", x, ',')     # EQUIVALENT @ 11 sig figs
-    # writedlm("tests/juliaOut/finalpass/y.csv", y, ',')     # EQUIVALENT @ 11 sig figs
-    # writedlm("tests/juliaOut/finalpass/u.csv", u, ',')     # 4 diff @ 9 sig figs
-    # writedlm("tests/juliaOut/finalpass/v.csv", v, ',')     # 2 diff @ 9 sig figs
-    # writedlm("tests/juliaOut/finalpass/SnR.csv", SnR, ',') # 1 diff @ 8 sig figs
-    # writedlm("tests/juliaOut/finalpass/Pkh.csv", Pkh, ',') # 1 diff @ 10 sig figs
-
-    # Dummy values
     return x, y, u, v, SnR, Pkh
 end
 
@@ -369,12 +344,18 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 # Sum the product of each x and y indice with its own indice within
                 # the max_coords vector.
                 if length(max_coords) > 1
+                    display(max_coords)
                     max_x1 = round(Int, 
-                            sum([c[2]^2 for (c, i) in enumerate(max_coords)]) ./
+                            # sum([c[2]^2 for (c, i) in enumerate(max_coords)]) ./
+                            # sum([c[2] for c in max_coords]))
+                            sum([c[2]^2 for c in max_coords]) /
                             sum([c[2] for c in max_coords]))
                     max_y1 = round(Int, 
-                            sum([c[1]^2 for (c, i) in enumerate(max_coords)]) ./
+                            # sum([c[1]^2 for (c, i) in enumerate(max_coords)]) ./
+                            # sum([c[1] for c in max_coords]))
+                            sum([c[1]^2 for c in max_coords]) /
                             sum([c[1] for c in max_coords]))
+                    @show max_x1, max_y1 
                 end
                 
                 # Unpack cartesian index type. Only a handful iterations here
@@ -437,8 +418,8 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 if length(max_coords) == 1
                     p2_y2, p2_x2 = max_coords[1]
                 elseif length(max_coords) > 1
-                    p2_x2 = round(length(max_coords) ./ 2)
-                    p2_y2 = round(length(max_coords) ./ 2)
+                    p2_x2 = round(Int16, length(max_coords) ./ 2)
+                    p2_y2 = round(Int16, length(max_coords) ./ 2)
                 elseif isempty(max_coords)
                     error("Empty set found in Final Pass")
                 end
@@ -693,6 +674,7 @@ function linear_naninterp(u, v)
     return u, v
 end
 
+# Not currently used/functioning
 function naninterp(sample, pass)
     nan_coords = findall(x -> isnan(x), sample)
     non_nan_coords= findall(x -> !isnan(x), sample)
@@ -718,9 +700,26 @@ function naninterp(sample, pass)
     return sample
 end
 
+"""
+        regular_interp(samples, xs, ys, XI, YI)
+
+    Interpolates the given `samples` using linear interpolation on a regular grid defined by `xs` and `ys`.
+    The interpolated values are evaluated at the points defined by `XI` and `YI`.
+
+    Arguments
+    ---------
+    - `samples::AbstractArray`: The array of samples to be interpolated.
+    - `xs::AbstractArray`: The array of x-coordinates defining the grid.
+    - `ys::AbstractArray`: The array of y-coordinates defining the grid.
+    - `XI::AbstractArray`: The array of x-coordinates where the interpolated values are evaluated.
+    - `YI::AbstractArray`: The array of y-coordinates where the interpolated values are evaluated.
+
+    Returns
+    ---------
+    - `itp_results::Array{Float64, 2}`: The interpolated values evaluated at the points defined by `XI` and `YI`.
+"""
 function regular_interp(samples, xs, ys, XI, YI)
     itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
-    itp_results = zeros(Float64, (length(YI), length(XI)))
     itp_results = [itp(yi, xi) for yi in YI, xi in XI]
     return itp_results
 end
@@ -750,14 +749,40 @@ function build_grids_2(data)
     coarse_ys = LinRange(min_y, max_y, coarse_y_dim)
     coarse_xs = LinRange(min_x, max_x, coarse_x_dim)
 
-    fine_yi_dim = (coarse_y_dim * 2) + 1
-    fine_xi_dim = (coarse_x_dim * 2) + 1
+    # OG no NaN border
+    # fine_yi_dim = (coarse_y_dim * 2) + 1
+    # fine_xi_dim = (coarse_x_dim * 2) + 1
+
+    # NaN border adjustment
+    fine_yi_dim = (coarse_y_dim * 2) - 1
+    fine_xi_dim = (coarse_x_dim * 2) - 1
+
     fine_YI = LinRange(min_y, max_y, fine_yi_dim)
     fine_XI = LinRange(min_x, max_x, fine_xi_dim)
 
     return coarse_ys, coarse_xs, fine_YI, fine_XI
 end
 
+"""
+        build_grids(wins, overlap, sx, sy, i)
+
+    Build grids for interpolation.
+
+    Arguments
+    ---------
+    - `wins::Array{Float64,2}`: A matrix containing the window sizes for each iteration.
+    - `overlap::Float64`: The overlap between adjacent windows.
+    - `sx::Int`: The size of the x-axis.
+    - `sy::Int`: The size of the y-axis.
+    - `i::Int`: The index of the current window.
+
+    Returns
+    ---------
+    - `X::Array{Float64,1}`: The x-coordinates of the coarse grid points.
+    - `Y::Array{Float64,1}`: The y-coordinates of the coarse grid points.
+    - `XI::Array{Float64,1}`: The x-coordinates of the fine interpolated grid points.
+    - `YI::Array{Float64,1}`: The y-coordinates of the fine interpolated grid points.
+"""
 function build_grids(wins, overlap, sx, sy, i)
         next_win_x = wins[i + 1, 1]
         next_win_y = wins[i + 1, 2]
@@ -790,6 +815,37 @@ function build_grids(wins, overlap, sx, sy, i)
         end
 
     return X, Y, XI, YI
+end
+
+function make_border(data)
+    # Allocate space for the bordered matrix
+    bordered_matrix = zeros(Float64, (size(data, 1) + 2, size(data, 2) + 2))
+
+    # Extract the first and last rows and columns
+    first_row = data[1, :]
+    last_row = data[end, :]
+    first_col = data[:, 1]
+    last_col = data[:, end]
+
+    # Place border around new matrix, keeping space for each upcoming new row
+    # and column
+    bordered_matrix[1, 2:end-1] = first_row
+    bordered_matrix[end, 2:end-1] = last_row
+    bordered_matrix[2:end-1, 1] = first_col
+    bordered_matrix[2:end-1, end] = last_col
+
+    # Fill in the interior of the matrix
+    bordered_matrix[2:end-1, 2:end-1] = data
+    return bordered_matrix
+end
+
+function make_nan_border(data)
+    # Allocate space for the bordered matrix, make it NaNs then replace them
+    bordered_matrix = fill(NaN, (size(data, 1) + 2, size(data, 2) + 2))
+
+    # Fill in the interior of the matrix
+    bordered_matrix[2:end-1, 2:end-1] = data
+    return bordered_matrix
 end
 
 """
@@ -1009,7 +1065,7 @@ function intpeak(x1, y1, R, Rxm1, Rxp1, Rym1, Ryp1, N)
 end
 
 
-# COMPLEX NUMBER STATISTICS
+# STATISTICS
 """
 ## im_median_magnitude
     Take the median of a collection of complex numbers using the absolute magnitude.
@@ -1079,16 +1135,18 @@ function nan_std(collection)
 end
 
 """
-    nan_mean(collection)
+        nan_mean(collection)
 
-Compute the mean of a collection, excluding any NaN values.
+    Compute the mean of a collection, excluding any NaN values.
 
-# Arguments
-- `collection`: A collection of values.
+    Arguments
+    ---------
+    - `collection`: A collection of values.
 
-# Returns
-- The mean of the collection, excluding NaN values. If the collection is 
-empty or contains only NaN values, NaN is returned.
+    Returns
+    --------
+    - The mean of the collection, excluding NaN values. If the collection is 
+    empty or contains only NaN values, NaN is returned.
 """
 function nan_mean(collection)
     i = filter(x -> !isnan(x), collection)
@@ -1127,43 +1185,58 @@ function main(A, B)
 
     # other input params for piv
     dt = 1; overlap = 0.5; validvec = 3
-    @time x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
+    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
-    # Save original results prior to quality control
-    uraw = u
-    vraw = v
-
-    # snrfilt: reject data with too-low signal-to-noise level
+    # Reject data with too-low signal-to-noise level
     # TESTING: 1 diff @ 9 sig figs
-    snrthresh = 1.3
+    # snrthresh = 1.3  OG
+    snrthresh = 1.05  # More defined results lowering threshold
     ibad = findall(x -> x < snrthresh, SnR)
     u[ibad] .= NaN
     v[ibad] .= NaN
 
-    # peakfilt: reject data with too-low correlation peak height
+    # Reject data with too-low correlation peak height
     # TESTING: EQUIVALENT @ 9 sig figs
     pkhthresh = 0.3
     ibad = findall(x -> x < pkhthresh, Pkh)
     u[ibad] .= NaN
     v[ibad] .= NaN
 
-    # globfilt: reject data that disagree strongly with their neighbors in a
-    # local window
+    # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
     # TESTING: EQUIVALENT @ 9 sig figs  08/19
-    # writedlm("tests/juliaOut/main_u.csv", u, ',')
+    # writedlm("tests/juliaOut/main_itp_u.csv", u, ',')
     # writedlm("tests/juliaOut/main_v.csv", v, ',')
 
+    @show count(isnan, u)
+
+
+    # Plot U
+    u_map = heatmap(u, 
+                    title = "u [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    limits=(0, 200), 
+                    xlimits=(0, 385))
+
+    # Plot V
+    v_map = heatmap(v, 
+                    title = "v [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    ylimits=(0, 200), 
+                    xlimits=(0, 385))
+    
+    # Display side-by-side
+    display(plot(u_map, v_map, layout = (2, 1)))
+ 
     println("\n===============\nExiting now\n===============")
 end
 
 
-# ------ TEST ZONE ------
-# im1_path = "../data/im1.jpg"
-im1_path = "juliaPIV/data/im1.jpg"
-im2_path = "juliaPIV/data/im2.jpg"
-A = load(im1_path)
-B = load(im2_path)
+# ------ MAIN SCRIPT ------
+const IM1::String = "juliaPIV/data/im1.jpg"
+const IM2::String = "juliaPIV/data/im2.jpg"
+A = load(IM1)
+B = load(IM2)
 
-main(A, B)
-# ------ TEST ZONE ------
+time_main(A, B) = @time main(A, B)
+time_main(A, B)

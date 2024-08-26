@@ -1,14 +1,14 @@
 % Minimal PIV calculation for testing and development.  Uses a sample
 % Hopkins 2023 ROXSI image-pair.
 %
-clear
+% clear
 
 doprofile=0;  % set to '1' to use the matlab code profiler
 
 % load the two sample image frames into memory
 im1=imread('data/im1.jpg');
 im2=imread('data/im2.jpg');
-
+tic
 % set window sizes.  The algorithm will start by analyzing the frame-pairs
 % with an analysis window of size pass_sizes(1), then refines its estimate
 % with a smaller window (pass_sizes(2)), and so on.
@@ -76,5 +76,6 @@ for i=1:2
   subplot(2,1,i)
   axis equal tight
   ylim([0 200])
-disp('EXITING MAIN')
 end
+disp('EXITING MAIN')
+toc

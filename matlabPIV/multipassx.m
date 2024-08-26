@@ -1,6 +1,6 @@
-% Called by main, line 36. 
+% Called by main, line 36.
 % Leads to firstpass.m (line 20), localfilt.m (line 25),
-% naninterp.m (line 26/48), finalpass.m 
+% naninterp.m (line 26/48), finalpass.m
 
 function [x,y,u,v,SnR,Pkh]=multipassx(A,B,wins,Dt,overlap,sensit)
 
@@ -17,18 +17,22 @@ datax=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))))
 datay=zeros(floor(sy/(wins(1,1)*(1-overlap))),floor(sx/(wins(1,2)*(1-overlap))));
 for i=1:iter-1
   disp(['iter ' num2str(i) ' of ' num2str(iter)])
-
+  
   % PIV
   % func sig: firstpass(A,B,N,overlap,idx,idy)
   [x,y,datax,datay]=firstpass(A,B,wins(i,:),overlap,datax,datay);  %two functions to complete in here.
-
+  
   % validation.  TODO, simplify these codes!
   % [datax,datay]=globfilt(x,y,datax,datay,3);
   [datax,datay]=localfilt(x,y,datax,datay,sensit,'median',3,[]);
   [datax,datay]=naninterp(datax,datay,'linear',[],x,y);
+  
+  % path = sprintf('tests/mlabOut/nanitp_datax%d.csv', i);
+  % writematrix(datax, path);
+  
   datax=floor(datax);
   datay=floor(datay);
-
+  
   % expand the velocity data to twice the original size
   if(i~=iter-1)
     if wins(i,1)~=wins(i+1,1)
@@ -43,23 +47,24 @@ for i=1:iter-1
       YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
     else
       YI=(1:((1-overlap)*wins(i+1,2)):sy-wins(i+1,2)+1)+(wins(i+1,2))/2;
-      Y=YI; 
+      Y=YI;
     end
     datax=round(interp2(X,Y',datax,XI,YI'));
     datay=round(interp2(X,Y',datay,XI,YI'));
     [datax,datay]=naninterp(datax,datay,'linear',[],...
-                            repmat(XI,size(datax,1),1),...
-                            repmat(YI',1,size(datax,2)));  % TODO simplify!
+      repmat(XI,size(datax,1),1),...
+      repmat(YI',1,size(datax,2)));  % TODO simplify!
     datax=round(datax);
     datay=round(datay);
-  end
 
+    disp(size(datax))
+    % path = sprintf('tests/mlabOut/datax%d.csv', i);
+    % writematrix(datax, path);
+  end
+  
 end
-% writematrix(datax, "../tests/mlabOut/normal_interp/penultimate_loop.csv")
 
 % Final pass gives displacement to subpixel accuracy
 disp('Final iteration')
-
-% Call plan_fft
 
 [x,y,u,v,SnR,Pkh]=finalpass(A,B,wins(end,:),overlap,round(datax),round(datay),Dt);

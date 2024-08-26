@@ -16,7 +16,7 @@ end
 function display_heatmap(path, title)
     data = read_in_data(path)
     xgrid, ygrid = get_grid(data)
-    heatmap(ygrid, xgrid, data, title=title, c=:viridis)
+    heatmap(ygrid, xgrid, data, title=title, c=:viridis, clims=(-25., 25.), ylims=(1, 127), xlims=(1, 191))
 end
 
 function display_3d(path, title)
@@ -26,11 +26,14 @@ function display_3d(path, title)
 end
 
 
-path = "tests/juliaOut/multipass_loop/penultimate_datax.csv"
-title = "Julia penultimate_datax w/Modified grids"
-
-path = "tests/mlabOut/multipass_loop/reginterp_datax.csv"
-title = "Mlab reginterp_datax"
+path = "tests/juliaOut/datax1.csv"
+title = "Julia interp_datax1"
 
 display_heatmap(path, title)
-display_3d(path, title)
+
+path = "tests/mlabOut/datax1.csv"
+title = "Mlab datax1"
+
+display_heatmap(path, title)
+# display_3d(path, title)
+
