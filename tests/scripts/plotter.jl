@@ -26,8 +26,8 @@ function display_3d(path, title)
 end
 
 
-path = "tests/juliaOut/datax1.csv"
-title = "Julia interp_datax1"
+path = "tests/juliaOut/datax_pass_1.csv"
+title = "Julia datax_pass_1"
 
 display_heatmap(path, title)
 

@@ -135,7 +135,20 @@ function make_nan_border(data)
     return bordered_matrix
 end
 
-test_M = [peaks(x, y) for x in -3:1:3, y in -3:1:3]
-y, x, yi, xi = build_grids_2(test_M)
-itp_M = regular_interp(test_M, x, y, xi, yi)
-make_nan_border(itp_M)
+function intpeak(x1, y1, R, Rxm1, Rxp1, Rym1, Ryp1, N)
+    if length(N) == 2
+        M = N[1]; N = N[2]
+    else
+        M = N
+    end
+    x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / ((2 * log(Complex(Rxm1))) - (4 * log(Complex(R))) + (2 * log(Complex(Rxp1)))))
+    y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / ((2 * log(Complex(Rym1))) - (4 * log(Complex(R))) + (2 * log(Complex(Ryp1)))))
+    x0 = x01 - M
+    y0 = y01 - N
+
+    x0 = real(x0)
+    y0 = real(y0)
+
+    return x0, y0
+end
+

@@ -57,9 +57,8 @@ for i=1:iter-1
     datax=round(datax);
     datay=round(datay);
 
-    disp(size(datax))
-    % path = sprintf('tests/mlabOut/datax%d.csv', i);
-    % writematrix(datax, path);
+    path = sprintf('tests/mlabOut/datax%d.csv', i);
+    writematrix(datax, path);
   end
   
 end

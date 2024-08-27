@@ -50,13 +50,8 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
         datax, datay = localfilt(x, y, datax, datay, sensit)
 
         datax, datay = linear_naninterp(datax, datay)
-        # writedlm("tests/juliaOut/nanitp_datax$i.csv", datax, ',')
-
         datax = floor.(Int, datax)
         datay = floor.(Int, datay)
-        # writedlm("tests/juliaOut/datax.csv", datax, ',')
-        # writedlm("tests/juliaOut/datay.csv", datay, ',')
-
 
         if i != total_passes - 1
             Y, X, YI, XI = build_grids_2(datax)
@@ -72,8 +67,9 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             datax, datay = linear_naninterp(datax, datay)
             datax = round.(datax)
             datay = round.(datay)
-            # writedlm("tests/juliaOut/datax$i.csv", datax, ',')
             # ---------------------------------
+
+            # writedlm("tests/juliaOut/datax_pass_$i.csv", datax, ',')
         end
     end
 
@@ -184,7 +180,6 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 else
                     subset = R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
                                 Int(floor(.5*M+2)):Int(floor(1.5*M-3))]
-                    # max = maximum(R)
                     max = maximum(subset)
                     max_coords = findall(x -> x == max, subset)
                     max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
@@ -194,14 +189,14 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 # Sum the product of each x and y indice with its own indice within
                 # the max_coords vector.
                 if length(max_coords) > 1
-
+                    # FLIPPED C,I TO I,C
                     max_x1 = round(
-                        Int, sum([c[2] * i for (c, i) in enumerate(max_coords)]) / 
+                        Int, sum([c[2] * i for (i, c) in enumerate(max_coords)]) / 
                         sum([c[2] for c in max_coords]))
                     max_y1 = round(
-                        Int, sum([c[1] * i for (c, i) in enumerate(max_coords)]) / 
+                        Int, sum([c[1] * i for (i, c) in enumerate(max_coords)]) / 
                         sum([c[1] for c in max_coords]))
-
+                    
                 # Handle empty max_coords vector.
                 elseif isempty(max_coords)
                     idx[cj, ci] = NaN
@@ -209,9 +204,9 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                     max_x1 = NaN
                     max_y1 = NaN
                 
-                # Otherwise, unpack into max coordinates to be used in code below.
+                # Otherwise, unpack into max coordinates
                 else
-                    max_y1, max_x1 = max_coords[1]
+                    max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
                 end
 
                 # Store displacements in variables datax/datay
@@ -261,6 +256,7 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
         pad_matrix = pad_for_xcorr(A[1:convert(Int, M), 1:convert(Int, N)])
         P = plan_fft(pad_matrix; flags=FFTW.MEASURE)
     else
+        M = convert(Int, M); N = convert(Int, N)
         P = plan_fft(A[1:M, 1:N])
     end
 
@@ -315,8 +311,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
 
             E = E.-mean(E); F = D2.-mean(D2)
 
-            # TESTING: R equivalency at cj && ci == 1
-            #                           cj && ci == 196, 46
             # Cross correlate and FFT
             if pad
                 R = xcorrf2(E, F, P, true) ./ ( N * M * stad1 * stad2)
@@ -336,33 +330,21 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                     max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
                 end
 
-                # A COUPLE OF ITERATIONS ARE ONLY FINDING A SINGLE MAXIMUM COORD
-                # WHEN THERE SHOULD BE 2 ACCORDING TO MLAB. THIS COULD BE WHERE
-                # THE SLIGHT ERRORS ARE COMING FROM.
-
                 # Handle a vector that has multiple maximum coordinates.
                 # Sum the product of each x and y indice with its own indice within
                 # the max_coords vector.
                 if length(max_coords) > 1
-                    display(max_coords)
                     max_x1 = round(Int, 
-                            # sum([c[2]^2 for (c, i) in enumerate(max_coords)]) ./
-                            # sum([c[2] for c in max_coords]))
                             sum([c[2]^2 for c in max_coords]) /
                             sum([c[2] for c in max_coords]))
                     max_y1 = round(Int, 
-                            # sum([c[1]^2 for (c, i) in enumerate(max_coords)]) ./
-                            # sum([c[1] for c in max_coords]))
                             sum([c[1]^2 for c in max_coords]) /
                             sum([c[1] for c in max_coords]))
-                    @show max_x1, max_y1 
                 end
                 
                 # Unpack cartesian index type. Only a handful iterations here
                 if length(max_coords) == 1
-                    for (i, j) in max_coords
-                        max_y1 = i; max_x1 = j
-                    end
+                    max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
                 end
                 
                 # Some kind of manual adjustment?
@@ -373,7 +355,6 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                     max_y1 = 2
                 end
 
-                # Runs without error, seems to be equivalent.
                 # 3-point peak fit using gaussian fit
                 x_0, y_0 = intpeak(max_x1, max_y1, 
                                 R[max_y1, max_x1],
@@ -385,9 +366,10 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 )
 
                 R2 = copy(R)
+
                 # This section had a note to try to simplify their try-catch
                 # clause by using a distance check.
-                if max_y1 > 3 && max_x1 > 3
+                if max_y1 + 3 <= 15 && max_y1 - 3 >= 1 && max_x1 + 3 <= 15 && max_x1 - 3 >= 1
                     R2[max_y1 - 3:max_y1 + 3, max_x1 - 3: max_x1 + 3] .= NaN
                 else
                     R2[max_y1 - 1: max_y1 + 1, max_x1 - 1: max_x1 + 1] .= NaN
@@ -395,7 +377,10 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
 
                 if size(R, 1) == (N - 1)
                     max_val = maximum(R2)
-                    p2_y2, p2_x2 = findall(x -> x == max_val, R2)[1]
+                    p2_coords = findall(x -> x == max_val, R2)
+                    if length(p2_coords) == 1
+                        p2_y2, p2_x2 = p2_coords[1][1], p2_coords[1][2]
+                    end
                 else
                     # Find subset of R2 and remember where all !NaN vals are for later reindexing
                     subset = R2[floor(Int, 0.5 * N):floor(Int, 1.5 * N - 1), 
@@ -416,7 +401,7 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 end
 
                 if length(max_coords) == 1
-                    p2_y2, p2_x2 = max_coords[1]
+                    p2_y2, p2_x2 = max_coords[1][1], max_coords[1][2]
                 elseif length(max_coords) > 1
                     p2_x2 = round(Int16, length(max_coords) ./ 2)
                     p2_y2 = round(Int16, length(max_coords) ./ 2)
@@ -880,32 +865,20 @@ function globfilt(u, v)
         scale = 0.1
     end
 
-    sx = 3 * nan_std(u[:]); sy = 3 * nan_std(v[:])
-    xo = nan_mean(u[:]); yo = nan_mean(v[:])
+    sx = 3 * nan_std(u[:])
+    sy = 3 * nan_std(v[:])
+    xo = nan_mean(u[:])
+    yo = nan_mean(v[:])
     ii = [xo + sx; xo + sx; xo - sx; xo - sx]
     jj = [yo + sy; yo - sy; yo - sy; yo + sy]
-
-    # This line isn't necessary for non-manual filtration
-    # prev_index = findall(x -> isnan(x), u)
-    
-    # TESTING: Success! in is equivalent to matlab  08/19
-    # writedlm("tests/juliaOut/IN.csv", in, ',')
 
     # Locate points inside chosen area
     poly_points = Point.(ii, jj)  # Define polygon
     points = vec(Point.(u, v))    # Convert u, v to Points for isinside
     in = [isinside(p, poly_points) for p in points]  # Check if points are inside polygon
 
-    # This line isn't necessary for non-manual filtration
-    # nx = x[.!in]; ny = y[.!in]; nu = u[.!in]; nv = v[.!in]
-    # writedlm("tests/juliaOut/nx.csv", nx, ',')   # Equivalent
-    # writedlm("tests/juliaOut/ny.csv", ny, ',')   # Equivalent
-    # writedlm("tests/juliaOut/nu.csv", nu, ',')   # Equiv to 10 sig figs
-    # writedlm("tests/juliaOut/nv.csv", nv, ',')   # Equiv to 9 sig figs
-    
-    u[.!in] .= NaN; v[.!in] .= NaN
-    # writedlm("tests/juliaOut/u.csv", u, ',')
-    # writedlm("tests/juliaOut/v.csv", v, ',')
+    u[.!in] .= NaN
+    v[.!in] .= NaN
 
     return u, v
 end
@@ -954,15 +927,11 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     minus_rows = round(Int, floor(m/2))
     nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
     nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
-    # TESTING 07/18: Success! NV/NU are both equivalent to matlab
     
     INx = zeros(eltype(nu), size(nu))
     INx[from_cols: end - minus_rows, from_cols: end - minus_rows] = IN
-    # Testing 07/18: Success! INx equivalent to matlab
     
     U2 = nu .+ im .* nv
-    # Testing 07/18: Sucess! Matlab equivalency. 
-    # writedlm("tests/juliaOut/first_localfilt/U2.csv", U2, ',')
 
     ma, na = size(U2)
     histostd = zeros(ComplexF64, size(nu)) 
@@ -988,13 +957,6 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
         end
     end 
 
-    # TESTING 07/18: histostd matrices are equivalent to 11 decimal points, then 
-    #          matlab rounds off and Julia continues on for a few more digits
-    # writedlm("tests/juliaOut/first_localfilt/histostd.csv", histostd, ',')
-
-    # TESTING 07/29: Success!! Matrices are equivalent. Holy moly!
-    # writedlm("tests/juliaOut/first_localfilt/histo.csv", histo, ',')
-    
     # Locate gridpoints w/higher value than the threshold
     coords = findall(
         (real(U2) .> real(histo) .+ threshold .* real(histostd)) .|
@@ -1008,10 +970,6 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
         nv[coords[jj]] = NaN
     end
 
-    # TESTING 07/29: Sucess!! Both matrices equivalent. Fixing histo fixed these.
-    # writedlm("tests/juliaOut/first_localfilt/nu.csv", nu, ',')
-    # writedlm("tests/juliaOut/first_localfilt/nv.csv", nv, ',')
-
     # Skipped print statement about how many vectors were filtered.
     # Skpped checking for 'interp' arg, because the actual program wasn't using
     # it. We call naninterp explicitly right after this function.
@@ -1020,10 +978,6 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
     m_floor_two = floor(Int, m/2)
     hu = nu[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
     hv = nv[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
-
-    # TESTING 07/29: Matrices equivalent! Everything here is perfect.
-    # writedlm("tests/juliaOut/first_localfilt/hu.csv", hu, ',')
-    # writedlm("tests/juliaOut/first_localfilt/hv.csv", hv, ',')
 
     return hu, hv
 end
@@ -1053,8 +1007,10 @@ function intpeak(x1, y1, R, Rxm1, Rxp1, Rym1, Ryp1, N)
     else
         M = N
     end
-    x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / ((2 * log(complex(Rxm1))) - (4 * log(R)) + (2 * log(complex(Rxp1)))))
-    y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / ((2 * log(complex(Rym1))) - (4 * log(R)) + (2 * log(complex(Ryp1)))))
+    # x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / ((2 * log(complex(Rxm1))) - (4 * log(R)) + (2 * log(complex(Rxp1)))))
+    # y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / ((2 * log(complex(Rym1))) - (4 * log(R)) + (2 * log(complex(Ryp1)))))
+    x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / ((2 * log(Complex(Rxm1))) - (4 * log(Complex(R))) + (2 * log(Complex(Rxp1)))))
+    y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / ((2 * log(Complex(Rym1))) - (4 * log(Complex(R))) + (2 * log(Complex(Ryp1)))))
     x0 = x01 - M
     y0 = y01 - N
 
@@ -1070,7 +1026,8 @@ end
 ## im_median_magnitude
     Take the median of a collection of complex numbers using the absolute magnitude.
     This great function was created by the Julia Community, specifically:
-    @PeterSimmon & @mbauman
+    @PeterSimmon & @mbauman 07/23/2024
+    https://discourse.julialang.org/t/median-of-complex-numbers-different-from-matlab-output/117352/5
 """
 function im_median_magnitude(collection::AbstractArray{Complex{T}}) where {T}
     i = filter(x -> !isnan(x), collection)
@@ -1188,15 +1145,13 @@ function main(A, B)
     x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
     # Reject data with too-low signal-to-noise level
-    # TESTING: 1 diff @ 9 sig figs
-    # snrthresh = 1.3  OG
+    # snrthresh = 1.3  # OG
     snrthresh = 1.05  # More defined results lowering threshold
     ibad = findall(x -> x < snrthresh, SnR)
     u[ibad] .= NaN
     v[ibad] .= NaN
 
     # Reject data with too-low correlation peak height
-    # TESTING: EQUIVALENT @ 9 sig figs
     pkhthresh = 0.3
     ibad = findall(x -> x < pkhthresh, Pkh)
     u[ibad] .= NaN
@@ -1204,21 +1159,16 @@ function main(A, B)
 
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
-    # TESTING: EQUIVALENT @ 9 sig figs  08/19
-    # writedlm("tests/juliaOut/main_itp_u.csv", u, ',')
-    # writedlm("tests/juliaOut/main_v.csv", v, ',')
-
+    
     @show count(isnan, u)
 
 
-    # Plot U
     u_map = heatmap(u, 
                     title = "u [pixels/frame]", 
                     aspect_ratio = :equal, 
                     limits=(0, 200), 
                     xlimits=(0, 385))
 
-    # Plot V
     v_map = heatmap(v, 
                     title = "v [pixels/frame]", 
                     aspect_ratio = :equal, 
