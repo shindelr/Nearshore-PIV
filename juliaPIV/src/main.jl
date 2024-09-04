@@ -4,9 +4,7 @@ using FFTW            # Fast Fourier Transforms library built on C
 using Images          # Basic image processing library
 using FileIO          # I/O library
 using DelimitedFiles  # Write matrices to CSV
-using Skipper         # Special skipping library to skip NaNs and other things
 using Interpolations
-# using ScatteredInterpolation
 using Plots
 using Luxor            # For creating inpolygon() functionality
 
@@ -28,38 +26,34 @@ using Luxor            # For creating inpolygon() functionality
     SnR: Ratio representing signal-to-noise.\n
     Pkh: Peak height for use in validation of vector field?\n
 """
-function multipassx(A, B, wins, Dt, overlap, sensit)
-    # Convert the images to matrices to floats
-    A = convert(Matrix{Float64}, A)
-    B = convert(Matrix{Float64}, B)
-
+function multipassx(A::Matrix{Float32}, B::Matrix{Float32}, wins::Vector{Int32}, Dt::Int32, 
+                    overlap::Float32, sensit::Int32)
     sy, sx = size(A)
-    total_passes = size(wins, 1)
+    # total_passes = size(wins, 1)
+    total_passes = length(wins)
 
     # Initial passes are for removing large-scale displacements. Initialize
     # displacements (datax,datay) to zero
-    data_dim_1 = floor(Int64, (sy/(wins[1,1] * (1-overlap))))
-    data_dim_2 = floor(Int64, (sx/(wins[1,2] * (1-overlap))))
-    datax = zeros(Float64, (data_dim_1, data_dim_2))
+    data_dim_1::Int32 = sy/(wins[1] * (1-overlap))
+    data_dim_2::Int32 = sx/(wins[1] * (1-overlap))
+    datax = zeros(Float32, (data_dim_1, data_dim_2))
     datay = copy(datax)
+
     for i in 1:total_passes - 1
         println("Pass ", i, " of ", total_passes )
     
-        x, y, datax, datay = firstpass(A, B, wins[i, :], overlap, datax, datay)
-
+        x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
         datax, datay = localfilt(x, y, datax, datay, sensit)
-
+        
         datax, datay = linear_naninterp(datax, datay)
-        datax = floor.(Int, datax)
-        datay = floor.(Int, datay)
+        datax = floor.(datax)
+        datay = floor.(datay)
 
         if i != total_passes - 1
             Y, X, YI, XI = build_grids_2(datax)
-            # datax = round.(regular_interp(datax, X, Y, XI, YI))
-            # datay = round.(regular_interp(datay, X, Y, XI, YI))
             datax = regular_interp(datax, X, Y, XI, YI)
             datay = regular_interp(datay, X, Y, XI, YI)
-
+            
             # NAN BORDER ATTEMPT ----------------
             datax = make_nan_border(datax)
             datay = make_nan_border(datay)
@@ -68,13 +62,11 @@ function multipassx(A, B, wins, Dt, overlap, sensit)
             datax = round.(datax)
             datay = round.(datay)
             # ---------------------------------
-
-            # writedlm("tests/juliaOut/datax_pass_$i.csv", datax, ',')
         end
     end
 
     println("Final Pass")
-    x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end, :], overlap, datax, datay, Dt)
+    x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end], overlap, datax, datay, Dt)
 
     return x, y, u, v, SnR, Pkh
 end
@@ -93,40 +85,40 @@ end
     overlap: Fraction of window overlap. Int.\n
     idx: Matrix of same type as A, containing data displacement information.\n
     idy: Matrix of same type as A, containing data displacement information.\n
-    pad: Bool to handle padding of the fast fourier transforms. Default to true,\
-    takes extra time but dramatically increases final resolution of the plots.
     \n**:returns:**\n
     x: \n
     y: \n
     datax: \n
     datay: \n
 """
-function firstpass(A, B, N, overlap, idx, idy, pad=true)
-    M = floor(Int, N[1]); N = floor(Int, N[2])
-    if pad
-        pad_matrix = pad_for_xcorr( A[1:M, 1:N])
-        P = plan_fft(pad_matrix; flags=FFTW.MEASURE)
-    else
-        P = plan_fft(A[1:M, 1:N])
-    end
+function firstpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, overlap::Float32, 
+                    idx::Matrix{Float32}, idy::Matrix{Float32})
+    M = N
+
+    # Set up for FFT plans
+    pad_matrix_a = pad_for_xcorr(A[1:M, 1:N])
+    pad_matrix_b = pad_for_xcorr(B[1:M, 1:N])
+    P = plan_fft(pad_matrix_a; flags=FFTW.PATIENT)
+    Pi = plan_ifft(pad_matrix_a; flags=FFTW.PATIENT)
 
     # Initializing matrices
     sy, sx = size(A)
-    xx_dim1 = ceil(Int, ((size(A,1)-N) / ((1-overlap) * N))) + 1
-    xx_dim2 = ceil(Int, ((size(A,2)-M) / ((1-overlap) * M))) + 1
+    xx_dim1 = ceil(Int32, ((size(A,1)-N) / ((1-overlap) * N))) + 1
+    xx_dim2 = ceil(Int32, ((size(A,2)-M) / ((1-overlap) * M))) + 1
     xx = zeros(eltype(A), (xx_dim1, xx_dim2))
     yy = copy(xx)
     datax = copy(xx)
     datay = copy(xx)
-    IN = zeros(Int64, size(A))
+    IN = zeros(Int32, size(A))
 
     cj = 1
+
     for jj in 1:((1-overlap) * N):(sy - N + 1)
         ci = 1
         for ii in 1:((1-overlap) * M):(sx - M + 1)
             # Floor correct?
-            IN_i_1 = floor(Int64, (jj + N/2))
-            IN_i_2 = floor(Int64, (ii + M/2))
+            IN_i_1 = floor(Int32, (jj + N/2))
+            IN_i_2 = floor(Int32, (ii + M/2))
 
             if IN[IN_i_1, IN_i_2] != 1
 
@@ -150,11 +142,10 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                     idx[cj, ci] = sx - M + 1 - ii
                 end
 
-                # Floor correct?
-                C = A[floor(Int, jj):floor(Int, jj+N-1), 
-                      floor(Int, ii):floor(Int, ii+M-1)]
-                D = B[floor(Int, jj+idy[cj, ci]):floor(Int, jj+N-1+idy[cj, ci]), 
-                      floor(Int, ii+idx[cj, ci]):floor(Int, ii+M-1+idx[cj, ci])]
+                C = A[floor(Int32, jj):floor(Int32, jj+N-1), 
+                      floor(Int32, ii):floor(Int32, ii+M-1)]
+                D = B[floor(Int32, jj+idy[cj, ci]):floor(Int32, jj+N-1+idy[cj, ci]), 
+                      floor(Int32, ii+idx[cj, ci]):floor(Int32, ii+M-1+idx[cj, ci])]
                 
                 C = C.-mean(C); D = D.-mean(D)
                 stad1 = std(C); stad2 = std(D)
@@ -167,22 +158,18 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 end
 
                 # Call xcorrf2, passing in the FFT plan and normalize result
-                if pad
-                    R = xcorrf2(C, D, P, true) ./ ( N * M * stad1 * stad2)
-                else
-                    R = xcorrf2(C, D, P, false) ./ ( N * M * stad1 * stad2)
-                end
+                R = xcorrf2(C, D, P, Pi, pad_matrix_a, pad_matrix_b) ./ ( N * M * stad1 * stad2)
 
                 # Find position of maximal value of R
                 if size(R, 1) == (N - 1)  # I think checking for second to last pass
                     max = maximum(R)
                     max_coords = findall(x -> x == max, R)
                 else
-                    subset = R[Int(floor(.5*N+2)):Int(floor(1.5*N-3)), 
-                                Int(floor(.5*M+2)):Int(floor(1.5*M-3))]
+                    subset = R[Int32(.5*N+2):Int32(1.5*N-3), 
+                                Int32(.5*M+2):Int32(1.5*M-3)]
                     max = maximum(subset)
                     max_coords = findall(x -> x == max, subset)
-                    max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
+                    max_coords = [(i[1] + Int32(0.5*N+1), i[2] + Int32(0.5*M+1)) for i in max_coords]
                 end
 
                 # Handle a vector that has multiple maximum coordinates.
@@ -191,10 +178,10 @@ function firstpass(A, B, N, overlap, idx, idy, pad=true)
                 if length(max_coords) > 1
                     # FLIPPED C,I TO I,C
                     max_x1 = round(
-                        Int, sum([c[2] * i for (i, c) in enumerate(max_coords)]) / 
+                        Int32, sum([c[2] * i for (i, c) in enumerate(max_coords)]) / 
                         sum([c[2] for c in max_coords]))
                     max_y1 = round(
-                        Int, sum([c[1] * i for (i, c) in enumerate(max_coords)]) / 
+                        Int32, sum([c[1] * i for (i, c) in enumerate(max_coords)]) / 
                         sum([c[1] for c in max_coords]))
                     
                 # Handle empty max_coords vector.
@@ -245,25 +232,20 @@ end
     Distributed under the terms of the GNU - GPL license
     timestamp: 09:26, 4 Mar 2011
 """
-function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
-    # Set up
-    if length(N) == 1
-        M = N
-    else
-        M = N[1]; N = N[2]
-    end
-    if pad
-        pad_matrix = pad_for_xcorr(A[1:convert(Int, M), 1:convert(Int, N)])
-        P = plan_fft(pad_matrix; flags=FFTW.MEASURE)
-    else
-        M = convert(Int, M); N = convert(Int, N)
-        P = plan_fft(A[1:M, 1:N])
-    end
+function finalpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, ol::Float32, 
+                    idx::Matrix{Float32}, idy::Matrix{Float32}, Dt::Int32)
+    M = N
+
+    # FFT setup
+    pad_matrix_a = pad_for_xcorr(A[1:M, 1:N])
+    pad_matrix_b = pad_for_xcorr(B[1:M, 1:N])
+    P = plan_fft(pad_matrix_a; flags=FFTW.PATIENT)
+    Pi = plan_ifft(pad_matrix_a; flags=FFTW.PATIENT)
 
     cj = 1
     sy, sx = size(A)
-    dim_1 = ceil(Int, (sy - N) / ((1 - ol) * N)) + 1
-    dim_2 = ceil(Int, (sx - M) / ((1 - ol) * M)) + 1
+    dim_1 = ceil(Int32, (sy - N) / ((1 - ol) * N)) + 1
+    dim_2 = ceil(Int32, (sx - M) / ((1 - ol) * M)) + 1
 
     xp = zeros(eltype(A), (dim_1, dim_2))
     yp = copy(xp); up = copy(xp); vp = copy(xp); SnR = copy(xp); Pkh = copy(xp)
@@ -294,11 +276,11 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
             end
 
             D2 = B[
-                floor(Int, jj + idy[cj, ci]):floor(Int, jj + N - 1 + idy[cj, ci]),
-                floor(Int,ii + idx[cj, ci]): floor(Int, ii + M - 1 + idx[cj, ci])
+                Int32(jj + idy[cj, ci]):Int32(jj + N - 1 + idy[cj, ci]),
+                Int32(ii + idx[cj, ci]):Int32(ii + M - 1 + idx[cj, ci])
                 ]
-            E = A[floor(Int, jj):floor(Int, jj + N - 1),
-                  floor(Int, ii):floor(Int, ii + M - 1)]
+            E = A[Int32(jj):Int32(jj + N - 1),
+                  Int32(ii):Int32(ii + M - 1)]
 
             stad1 = std(E); stad2 = std(D2)
 
@@ -312,11 +294,7 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
             E = E.-mean(E); F = D2.-mean(D2)
 
             # Cross correlate and FFT
-            if pad
-                R = xcorrf2(E, F, P, true) ./ ( N * M * stad1 * stad2)
-            else
-                R = xcorrf2(E, F, P, false) ./ ( N * M * stad1 * stad2)
-            end
+            R = xcorrf2(E, F, P, Pi, pad_matrix_a, pad_matrix_b) ./ ( N * M * stad1 * stad2)
 
             if !any(isnan.(R)) & !all(x -> x == 0, R)
 
@@ -324,20 +302,23 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                 if size(R, 1) == (N - 1)
                     max_coords = findall(x -> x == maximum(R), R)
                 else
-                    subset = R[Int(floor(.5 * N + 2)):Int(floor(1.5 * N - 3)), 
-                                Int(floor(.5 * M + 2)):Int(floor(1.5 * M - 3))]
+                    subset = R[Int32(.5 * N + 2):Int32(1.5 * N - 3), 
+                                Int32(.5 * M + 2):Int32(1.5 * M - 3)]
+
+                    # max_coords::Vector{Tuple{Int32, Int32}} = findall(x -> x == maximum(subset), subset)
                     max_coords = findall(x -> x == maximum(subset), subset)
-                    max_coords = [(i[1] + Int(0.5*N+1), i[2] + Int(0.5*M+1)) for i in max_coords]
+                    max_coords = [(i[1] + Int32(0.5*N+1), i[2] + Int32(0.5*M+1)) for i in max_coords]
                 end
 
                 # Handle a vector that has multiple maximum coordinates.
                 # Sum the product of each x and y indice with its own indice within
                 # the max_coords vector.
                 if length(max_coords) > 1
-                    max_x1 = round(Int, 
+                    @show max_coords
+                    max_x1 = round(Int32, 
                             sum([c[2]^2 for c in max_coords]) /
                             sum([c[2] for c in max_coords]))
-                    max_y1 = round(Int, 
+                    max_y1 = round(Int32, 
                             sum([c[1]^2 for c in max_coords]) /
                             sum([c[1] for c in max_coords]))
                 end
@@ -355,6 +336,7 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                     max_y1 = 2
                 end
 
+                # Runs without error, seems to be equivalent.
                 # 3-point peak fit using gaussian fit
                 x_0, y_0 = intpeak(max_x1, max_y1, 
                                 R[max_y1, max_x1],
@@ -369,9 +351,9 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
 
                 # This section had a note to try to simplify their try-catch
                 # clause by using a distance check.
-                if max_y1 + 3 <= 15 && max_y1 - 3 >= 1 && max_x1 + 3 <= 15 && max_x1 - 3 >= 1
+                try
                     R2[max_y1 - 3:max_y1 + 3, max_x1 - 3: max_x1 + 3] .= NaN
-                else
+                catch
                     R2[max_y1 - 1: max_y1 + 1, max_x1 - 1: max_x1 + 1] .= NaN
                 end
 
@@ -383,28 +365,28 @@ function finalpass(A, B, N, ol, idx, idy, Dt, pad=true)
                     end
                 else
                     # Find subset of R2 and remember where all !NaN vals are for later reindexing
-                    subset = R2[floor(Int, 0.5 * N):floor(Int, 1.5 * N - 1), 
-                                floor(Int, 0.5 * M):floor(Int, 1.5 * M - 1)]
+                    subset = R2[Int32(0.5 * N):Int32(1.5 * N - 1), 
+                                Int32(0.5 * M):Int32(1.5 * M - 1)]
                     non_nans = findall(x -> !isnan(x), subset)
 
                     # Filter out all non-NaN values to find the maximum
                     # NaN vals contaminate arrays for the min/max functions
                     filt_subset = filter(!isnan, subset)
                     subset_max_val = maximum(filt_subset)
-                    max_coords = findall(x -> x == subset_max_val, filt_subset)
+                    max_coords_2 = findall(x -> x == subset_max_val, filt_subset)
                     
                     # Re-adjust coordinates to match original coords in R2
-                    og_max_coords = non_nans[max_coords]
-                    max_coords = [(i[1] + floor(Int, 0.5 * N - 1), 
-                                   i[2] + floor(Int, 0.5 * M - 1))
+                    og_max_coords = non_nans[max_coords_2]
+                    max_coords_2 = [(i[1] + floor(Int32, 0.5 * N - 1), 
+                                   i[2] + floor(Int32, 0.5 * M - 1))
                                    for i in og_max_coords]
                 end
 
-                if length(max_coords) == 1
-                    p2_y2, p2_x2 = max_coords[1][1], max_coords[1][2]
-                elseif length(max_coords) > 1
-                    p2_x2 = round(Int16, length(max_coords) ./ 2)
-                    p2_y2 = round(Int16, length(max_coords) ./ 2)
+                if length(max_coords_2) == 1
+                    p2_y2, p2_x2 = max_coords_2[1][1], max_coords_2[1][2]
+                elseif length(max_coords_2) > 1
+                    p2_x2 = round(Int32, length(max_coords_2) ./ 2)
+                    p2_y2 = round(Int32, length(max_coords_2) ./ 2)
                 elseif isempty(max_coords)
                     error("Empty set found in Final Pass")
                 end
@@ -446,7 +428,7 @@ end
     :returns:
         - A padded matrix of zeros.
 """
-function pad_for_xcorr(trunc_matrix)
+function pad_for_xcorr(trunc_matrix::Matrix{Float32})
     ma, na = size(trunc_matrix)
     mf = nextpow(2, ma + na)  
     return zeros(eltype(trunc_matrix), (mf, mf)) 
@@ -462,10 +444,6 @@ end
     \n**:params:**\n
     A: matrix (2D array) to be compared.\n
     B: matrix ((2D array)) to be compared.\n
-    pad: Transform and trim result to optimize the speed of the FFTs and\
-    increase the resolution of the resulting PIV plots. This was faster in \
-    matlab. Default val is true and the preoptimized FFT plan is used to offset\
-    the time issues. \n
     plan: Callable function representing a pre-planned, omptimized FFT. Created \
     using the dimensions of matrices A & B.
     \n**:return:**\n
@@ -476,7 +454,7 @@ end
     Author(s): R. Johnson\n
     Revision: 1.0   Date: 1995/11/27
 """
-function xcorrf2(A, B, plan, pad=true)
+function xcorrf2(A, B, plan, iplan, pad_matrix_a, pad_matrix_b)
     # Unpack size() return tuple into appropriate variables
     ma, na = size(A)
     mb, nb = size(B)
@@ -484,40 +462,27 @@ function xcorrf2(A, B, plan, pad=true)
     # Reverse conjugate
     B = conj(B[mb:-1:1, nb:-1:1])
 
-    # This is a time hog, but increases resolution of final plots by quite a bit
-    # Room for improvement here. I could pass in the original padded matrix somehow.
-    if pad
-        pad_matrix_a = pad_for_xcorr(A)
-        pad_matrix_b = pad_for_xcorr(B)
+    # Transfer data from og matrix to optimized sized ones
+    pad_matrix_a[1:size(A,1), 1:size(A,2)] = A[1:size(A,1), 1:size(A,2)]
+    pad_matrix_b[1:size(B,1), 1:size(B,2)] = B[1:size(B,1), 1:size(B,2)]
 
-        # Transfer data from og matrix to optimized sized ones
-        pad_matrix_a[1:size(A,1), 1:size(A,2)] = A[1:size(A,1), 1:size(A,2)]
-        pad_matrix_b[1:size(B,1), 1:size(B,2)] = B[1:size(B,1), 1:size(B,2)]
-
-        # Runs optimized FFTs using the plan
-        at = plan * pad_matrix_b
-        bt = plan * pad_matrix_a
-    else
-        bt = plan * A
-        at = plan * B
-    end
+    # Runs optimized FFTs using the plan
+    at = plan * pad_matrix_b
+    bt = plan * pad_matrix_a
 
     # Mult transforms and invert
     mult_at_bt = at.*bt
-    c = ifft(mult_at_bt)
+    c = iplan * mult_at_bt
+    # c = ifft(mult_at_bt)
 
     # Make all real
     c = real(c)
 
     # Trim
-    if pad
-        rows = ma + mb
-        cols = na + nb
-        # Keep everything from the first index to the index where padding began
-        c = c[1:rows - 1, 1:cols - 1]
-    else
-        c = c[1:end-1, 1:end-1]
-    end
+    rows = ma + mb
+    cols = na + nb
+    # Keep everything from the first index to the index where padding began
+    c = c[1:rows - 1, 1:cols - 1]
     return c
 end
 
@@ -556,23 +521,17 @@ end
     For use with MatPIV 1.6, Copyright
     Distributed under the terms of the GNU - GPL license
 """
-function linear_naninterp(u, v)
-    coords = findall(x->isnan(x), u)
+function linear_naninterp(u::Matrix{Float32}, v::Matrix{Float32})
+    coords::Vector{CartesianIndex{2}} = findall(x->isnan(x), u)
     numm = length(coords)
     dy,dx = size(u)
     lp = 1; tel = 1
 
-    # counter = 0
     # Now sort the NaN's after how many neighbors they have that are
     # physical values. Then we first interpolate those that have 8
     # neighbors, followed by 7, 6, 5, 4, 3, 2 and 1
-
     while !isempty(coords)
         nei = zeros(Int64, length(coords), 3)
-
-        # writedlm("tests/juliaOut/Jtest_py_px.csv", 
-        #         [(coords[i][1],coords[i][2]) for i in eachindex(coords)], 
-        #         ',')
 
         # Check neighbors
         for i in eachindex(coords)
@@ -603,13 +562,8 @@ function linear_naninterp(u, v)
             nei[i, 3] = py
         end
 
-        # !!! TESTING: Strange results, looks the same by hand but off by 24
-        # rows. Seems like the nan count is off by one in some cases?
-        # writedlm("tests/juliaOut/Jtest_presort_NEI.csv", nei, ',')
-        
         # Sort NEI by row to interpolate vectors with fewest spurious neighbors.
         nei = sortslices(nei, dims=1, lt=Base.isgreater)
-        # writedlm("tests/juliaOut/Jtest_postsort_NEI.csv", nei, ',')
   
         # Reconstruct sorted outliers and interpolate 1st 50%.
         idx = findall(x -> x >= 8, nei[:, 1])
@@ -634,13 +588,13 @@ function linear_naninterp(u, v)
                 corx1 = 0; corx2 = -1
             end
 
-            temp_u = u[py[j] - 1 + cory1:py[j] + 1 + cory2, 
+            temp_u::Matrix{Float32} = u[py[j] - 1 + cory1:py[j] + 1 + cory2, 
                     px[j] - 1 + corx1:px[j] + 1 + corx2] 
-            temp_v = v[py[j] - 1 + cory1:py[j] + 1 + cory2, 
+            temp_v::Matrix{Float32} = v[py[j] - 1 + cory1:py[j] + 1 + cory2, 
                     px[j] - 1 + corx1:px[j] + 1 + corx2] 
             
-            mean_prep_u = collect(Skipper.skip(x -> isnan(x), temp_u[:]))
-            mean_prep_v = collect(Skipper.skip(x -> isnan(x), temp_v[:]))
+            mean_prep_u = filter(!isnan, temp_u[:])
+            mean_prep_v = filter(!isnan, temp_v[:])
             u[py[j], px[j]] = mean(mean_prep_u)
             v[py[j], px[j]] = mean(mean_prep_v)
             
@@ -649,12 +603,8 @@ function linear_naninterp(u, v)
                 v[py[j], px[j]] = 0
             end
         end
-        tt = length(py)
         coords = findall(x->isnan(x), u)  # Might not be necessary
         lp += 1
-        # counter += 1
-        # println(counter)
-        # display(coords)
     end
     return u, v
 end
@@ -826,7 +776,7 @@ end
 
 function make_nan_border(data)
     # Allocate space for the bordered matrix, make it NaNs then replace them
-    bordered_matrix = fill(NaN, (size(data, 1) + 2, size(data, 2) + 2))
+    bordered_matrix::Matrix{Float32} = fill(NaN, (size(data, 1) + 2, size(data, 2) + 2))
 
     # Fill in the interior of the matrix
     bordered_matrix[2:end-1, 2:end-1] = data
@@ -853,7 +803,7 @@ end
     1999 -2014 copyright J.K.Sveen jks@math.uio.no
     Dept. of Mathematics, Mechanics Division, University of Oslo, Norway
 """
-function globfilt(u, v)
+function globfilt(u::Matrix{Float32}, v::Matrix{Float32})
     println("Global filter running - with limit: 3 * std [U V]")
     # Opportunity for perfomance improvement here.
     nan_filt_u = filter(!isnan, u)
@@ -914,37 +864,38 @@ end
             Successfully filtered matrices. New versions of u
             and v.
 """
-function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
+function localfilt(x, y, u::Matrix{Float32}, v::Matrix{Float32}, 
+                        threshold, median_bool=true, m=3, mask=[])
     IN = zeros(eltype(u), size(u))
 
-    dim1 = round(Int, size(u, 1) + 2 * floor(m/2))
-    dim2 = round(Int, size(u, 2) + 2 * floor(m/2))
+    dim1 = round(Int32, size(u, 1) + 2 * floor(m/2))
+    dim2 = round(Int32, size(u, 2) + 2 * floor(m/2))
     nu = zeros(eltype(u), (dim1, dim2)) * NaN
     nv = zeros(eltype(u), (dim1, dim2)) * NaN
     
     # Transfer over data
-    from_cols = round(Int, floor(m/2) + 1)
-    minus_rows = round(Int, floor(m/2))
+    from_cols = round(Int32, floor(m/2) + 1)
+    minus_rows = round(Int32, floor(m/2))
     nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
     nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
     
     INx = zeros(eltype(nu), size(nu))
     INx[from_cols: end - minus_rows, from_cols: end - minus_rows] = IN
     
-    U2 = nu .+ im .* nv
+    U2::Matrix{ComplexF32} = nu .+ im .* nv
 
     ma, na = size(U2)
-    histostd = zeros(ComplexF64, size(nu)) 
-    histo = zeros(ComplexF64, size(nu))
+    histostd = zeros(ComplexF32, size(nu)) 
+    histo = zeros(ComplexF32, size(nu))
 
     for ii in m - 1:1:na - m + 2
         for jj in m - 1:1:ma - m + 2
 
             if INx[jj, ii] != 1
-                m_floor_two = floor(Int, m / 2)
+                m_floor_two = floor(Int32, m / 2)
                 tmp = U2[jj - m_floor_two: jj + m_floor_two,
                         ii - m_floor_two: ii + m_floor_two] 
-                tmp[ceil(Int, m / 2), ceil(Int, m / 2)] = NaN;
+                tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN;
 
                 # Run the appropriate stat depending on method arg.
                 usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
@@ -970,14 +921,10 @@ function localfilt(x, y, u, v, threshold, median_bool=true, m=3, mask=[])
         nv[coords[jj]] = NaN
     end
 
-    # Skipped print statement about how many vectors were filtered.
-    # Skpped checking for 'interp' arg, because the actual program wasn't using
-    # it. We call naninterp explicitly right after this function.
-
-    m_ceil_two = ceil(Int, m/2)
-    m_floor_two = floor(Int, m/2)
-    hu = nu[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
-    hv = nv[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
+    m_ceil_two = ceil(Int32, m/2)
+    m_floor_two = floor(Int32, m/2)
+    hu::Matrix{Float32} = nu[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
+    hv::Matrix{Float32} = nv[m_ceil_two:end - m_floor_two, m_ceil_two:end - m_floor_two]
 
     return hu, hv
 end
@@ -1007,10 +954,8 @@ function intpeak(x1, y1, R, Rxm1, Rxp1, Rym1, Ryp1, N)
     else
         M = N
     end
-    # x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / ((2 * log(complex(Rxm1))) - (4 * log(R)) + (2 * log(complex(Rxp1)))))
-    # y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / ((2 * log(complex(Rym1))) - (4 * log(R)) + (2 * log(complex(Ryp1)))))
-    x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / ((2 * log(Complex(Rxm1))) - (4 * log(Complex(R))) + (2 * log(Complex(Rxp1)))))
-    y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / ((2 * log(Complex(Rym1))) - (4 * log(Complex(R))) + (2 * log(Complex(Ryp1)))))
+    x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / ((2 * log(Complex(Rxm1))) - (4 * log(R)) + (2 * log(Complex(Rxp1)))))
+    y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / ((2 * log(Complex(Rym1))) - (4 * log(R)) + (2 * log(Complex(Ryp1)))))
     x0 = x01 - M
     y0 = y01 - N
 
@@ -1127,32 +1072,32 @@ end
     \n**:returns:**\n
     PIV plots.
 """
-function main(A, B)
-    println("===============\nBegin execution\n===============\n")
+function main(A::Matrix{T}, B::Matrix{T}) where {T}
+    # Convert the images to matrices of floats
+    A = convert(Matrix{Float32}, A)
+    B = convert(Matrix{Float32}, B)
 
     pivwin = 16
-    log2pivwin = log2(pivwin)
+    log2pivwin::Int32 = log2(pivwin)
     if log2pivwin - round(log2pivwin) != 0
         error("pivwin must be factor of 2")
     end
 
-    pass_sizes = 2 .^ collect(6:-1:log2pivwin)
+    pass_sizes::Vector{Int32} = 2 .^ collect(Int32, 6:-1:log2pivwin)
     push!(pass_sizes, pass_sizes[end]) # Duplicate final element
-    pass_sizes = [pass_sizes pass_sizes] # Convert vector to matrix
 
     # other input params for piv
-    dt = 1; overlap = 0.5; validvec = 3
+    dt::Int32 = 1; overlap::Float32 = 0.5; validvec::Int32 = 3
     x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
     # Reject data with too-low signal-to-noise level
-    # snrthresh = 1.3  # OG
-    snrthresh = 1.05  # More defined results lowering threshold
+    snrthresh::Float32 = 1.3  # OG
     ibad = findall(x -> x < snrthresh, SnR)
     u[ibad] .= NaN
     v[ibad] .= NaN
 
     # Reject data with too-low correlation peak height
-    pkhthresh = 0.3
+    pkhthresh::Float32 = 0.3
     ibad = findall(x -> x < pkhthresh, Pkh)
     u[ibad] .= NaN
     v[ibad] .= NaN
@@ -1160,9 +1105,6 @@ function main(A, B)
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
     
-    @show count(isnan, u)
-
-
     u_map = heatmap(u, 
                     title = "u [pixels/frame]", 
                     aspect_ratio = :equal, 
@@ -1177,16 +1119,19 @@ function main(A, B)
     
     # Display side-by-side
     display(plot(u_map, v_map, layout = (2, 1)))
- 
-    println("\n===============\nExiting now\n===============")
 end
 
 
 # ------ MAIN SCRIPT ------
-const IM1::String = "juliaPIV/data/im1.jpg"
-const IM2::String = "juliaPIV/data/im2.jpg"
-A = load(IM1)
-B = load(IM2)
+function run_piv()
 
-time_main(A, B) = @time main(A, B)
-time_main(A, B)
+    IM1::String = "juliaPIV/data/im1.jpg"
+    IM2::String = "juliaPIV/data/im2.jpg"
+    IM1_M::Matrix{Gray{N0f8}} = load(IM1)
+    IM2_M::Matrix{Gray{N0f8}} = load(IM2)
+
+    main(IM1_M, IM2_M)
+end
+
+timed_run() = @time run_piv()
+timed_run()
