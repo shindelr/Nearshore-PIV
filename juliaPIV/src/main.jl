@@ -101,8 +101,8 @@ function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32,
     # Set up for FFT plans
     pad_matrix_a = pad_for_xcorr(A[1:M, 1:N])
     pad_matrix_b = pad_for_xcorr(B[1:M, 1:N])
-    P = plan_fft(pad_matrix_a; flags=FFTW.MEASURE)
-    Pi = plan_ifft(pad_matrix_a; flags=FFTW.MEASURE)
+    P = plan_fft(pad_matrix_a; flags=FFTW.ESTIMATE)
+    Pi = plan_ifft(pad_matrix_a; flags=FFTW.ESTIMATE)
    
     # Initializing matrices
     sy, sx = size(A)
@@ -242,8 +242,8 @@ function finalpass(A::Matrix{T}, B::Matrix{T}, N::Int32, ol::Float32,
     # FFT setup
     pad_matrix_a = pad_for_xcorr(A[1:M, 1:N])
     pad_matrix_b = pad_for_xcorr(B[1:M, 1:N])
-    P = plan_fft(pad_matrix_a; flags=FFTW.MEASURE)
-    Pi = plan_ifft(pad_matrix_a; flags=FFTW.MEASURE)
+    P = plan_fft(pad_matrix_a; flags=FFTW.ESTIMATE)
+    Pi = plan_ifft(pad_matrix_a; flags=FFTW.ESTIMATE)
     
     # Preallocations
     size_R_1 = size(pad_matrix_a, 1) - 1
@@ -495,35 +495,6 @@ function xcorrf2(A::Matrix{Float32}, B::Matrix{Float32}, plan, iplan,
     c = c[1:rows - 1, 1:cols - 1]
 
     return c
-end
-
-function xcorrf2!(R::Matrix{T}, A::Matrix{T}, B::Matrix{T}, plan!, iplan!, 
-        pad_matrix_a::Matrix{ComplexF32}, pad_matrix_b::Matrix{ComplexF32}, cj, ci) where {T}
-
-    # Unpack size() return tuple into appropriate variables
-    mb, nb = size(B)
-
-    # Reverse conjugate
-    B = conj(B[mb:-1:1, nb:-1:1])
-
-    # Transfer data from og matrix to optimized sized ones
-    pad_matrix_a[1:size(A,1), 1:size(A,2)] = A[1:size(A,1), 1:size(A,2)]
-    pad_matrix_b[1:size(B,1), 1:size(B,2)] = B[1:size(B,1), 1:size(B,2)]
-
-    # FFT in place
-    plan! * pad_matrix_a
-    plan! * pad_matrix_b
-
-    # Mult transforms and invert
-    pad_matrix_a .*= pad_matrix_b    
-    iplan! * pad_matrix_a
-
-    # Make all real and store in R
-    R .= real.(pad_matrix_a)
-
-    # Reset pads
-    fill!(pad_matrix_a, 0)
-    fill!(pad_matrix_b, 0)
 end
 
 
