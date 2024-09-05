@@ -10,24 +10,27 @@ using Luxor            # For creating inpolygon() functionality
 
 # PASS FUNCTIONS 
 """
-### multipassx
-    \n**:params:**\n
-    A: Matrix containing image data of first frame.\n
-    B: Matrix containing image data of second frame.\n
-    wins: 2D matrix of ints containing sub-window pixel sizes for each pass.\n
-    Dt: Frame time step in seconds (int). Pass 1 for 'pixels per frame velocity'.\n
-    overlap: Fraction of window overlap. Int.\n
-    sensit: Threshold for vector validation. Int. \n
-    \n**:returns:**\n
-    x: \n
-    y: \n
-    u: \n
-    v: \n
-    SnR: Ratio representing signal-to-noise.\n
-    Pkh: Peak height for use in validation of vector field?\n
-"""
-function multipassx(A::Matrix{Float32}, B::Matrix{Float32}, wins::Vector{Int32}, Dt::Int32, 
+    multipassx(A::Matrix{Float32}, B::Matrix{Float32}, wins::Vector{Int32}, Dt::Int32, 
                     overlap::Float32, sensit::Int32)
+
+    Parameters
+    ----------
+    A: Matrix containing image data of first frame.
+    B: Matrix containing image data of second frame.
+    wins: 2D matrix of ints containing sub-window pixel sizes for each pass.
+    Dt: Frame time step in seconds (int). Pass 1 for 'pixels per frame velocity'.
+    overlap: Fraction of window overlap. Int.
+    sensit: Threshold for vector validation. Int. 
+
+    Returns
+    ----------
+    u: U-component of pixel velocity
+    v: V-component of pixel velocity
+    SnR: Ratio representing signal-to-noise.
+    Pkh: Peak height for use in validation of vector field?
+"""
+function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32, 
+                    overlap::Float32, sensit::Int32) where {T}
     sy, sx = size(A)
     # total_passes = size(wins, 1)
     total_passes = length(wins)
@@ -42,8 +45,8 @@ function multipassx(A::Matrix{Float32}, B::Matrix{Float32}, wins::Vector{Int32},
     for i in 1:total_passes - 1
         println("Pass ", i, " of ", total_passes )
     
-        x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
-        datax, datay = localfilt(x, y, datax, datay, sensit)
+        datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
+        datax, datay = localfilt(datax, datay, sensit)
         
         datax, datay = linear_naninterp(datax, datay)
         datax = floor.(datax)
@@ -66,9 +69,9 @@ function multipassx(A::Matrix{Float32}, B::Matrix{Float32}, wins::Vector{Int32},
     end
 
     println("Final Pass")
-    x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end], overlap, datax, datay, Dt)
+    u, v, SnR, Pkh = finalpass(A, B, wins[end], overlap, datax, datay, Dt)
 
-    return x, y, u, v, SnR, Pkh
+    return u, v, SnR, Pkh
 end
 
 """
@@ -81,7 +84,7 @@ end
     \n**:params:**\n
     A: Matrix containing image data of first frame.\n
     B: Matrix containing image data of second frame.\n
-    N: Pair of Float64 representing sub-window pixel sizes for the pass.\n
+    N: Vector representing sub-window pixel sizes for the pass.\n
     overlap: Fraction of window overlap. Int.\n
     idx: Matrix of same type as A, containing data displacement information.\n
     idy: Matrix of same type as A, containing data displacement information.\n
@@ -91,24 +94,22 @@ end
     datax: \n
     datay: \n
 """
-function firstpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, overlap::Float32, 
-                    idx::Matrix{Float32}, idy::Matrix{Float32})
+function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32, 
+                    idx::Matrix{T}, idy::Matrix{Float32}) where {T}
     M = N
 
     # Set up for FFT plans
     pad_matrix_a = pad_for_xcorr(A[1:M, 1:N])
     pad_matrix_b = pad_for_xcorr(B[1:M, 1:N])
-    P = plan_fft(pad_matrix_a; flags=FFTW.PATIENT)
-    Pi = plan_ifft(pad_matrix_a; flags=FFTW.PATIENT)
-
+    P = plan_fft(pad_matrix_a; flags=FFTW.MEASURE)
+    Pi = plan_ifft(pad_matrix_a; flags=FFTW.MEASURE)
+   
     # Initializing matrices
     sy, sx = size(A)
     xx_dim1 = ceil(Int32, ((size(A,1)-N) / ((1-overlap) * N))) + 1
     xx_dim2 = ceil(Int32, ((size(A,2)-M) / ((1-overlap) * M))) + 1
-    xx = zeros(eltype(A), (xx_dim1, xx_dim2))
-    yy = copy(xx)
-    datax = copy(xx)
-    datay = copy(xx)
+    datax = zeros(eltype(A), (xx_dim1, xx_dim2))
+    datay = zeros(eltype(A), (xx_dim1, xx_dim2))
     IN = zeros(Int32, size(A))
 
     cj = 1
@@ -199,13 +200,9 @@ function firstpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, overlap::Fl
                 # Store displacements in variables datax/datay
                 datax[cj, ci] -= (max_x1 - M) + idx[cj,ci]
                 datay[cj, ci] -= (max_y1 - M) + idy[cj,ci]
-                xx[cj, ci] = ii + M/2
-                yy[cj, ci] = jj + N/2
                 ci += 1
 
             else
-                xx[cj, ci] = ii + M/2
-                yy[cj, ci] = jj + N/2
                 datax[cj, ci] = NaN
                 datay[cj, ci] = NaN
                 ci += 1
@@ -214,47 +211,57 @@ function firstpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, overlap::Fl
 
         cj += 1
     end
-    return xx, yy, datax, datay
+    return datax, datay
 end
 
 """
-### finalpass
-    TODO: Write me.
+    finalpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, ol::Float32, 
+                    idx::Matrix{Float32}, idy::Matrix{Float32}, Dt::Int32)
 
-    OG docstring
     Provides the final pass to get the displacements with
     subpixel resolution.
-
-
+    
+    Parameters
+    ----------
+    A: Matrix containing image data of first frame.
+    B: Matrix containing image data of second frame.
+    N: Vector representing sub-window pixel sizes for the pass.
+    overlap: Fraction of window overlap. Int.
+    idx: Matrix of same type as A, containing data displacement information.
+    idy: Matrix of same type as A, containing data displacement information.
 
     1999 - 2011, J. Kristian Sveen (jks@math.uio.no)
     For use with MatPIV 1.7, Copyright
     Distributed under the terms of the GNU - GPL license
     timestamp: 09:26, 4 Mar 2011
 """
-function finalpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, ol::Float32, 
-                    idx::Matrix{Float32}, idy::Matrix{Float32}, Dt::Int32)
+function finalpass(A::Matrix{T}, B::Matrix{T}, N::Int32, ol::Float32,
+                    idx::Matrix{T}, idy::Matrix{T}, Dt::Int32) where {T}
     M = N
 
     # FFT setup
     pad_matrix_a = pad_for_xcorr(A[1:M, 1:N])
     pad_matrix_b = pad_for_xcorr(B[1:M, 1:N])
-    P = plan_fft(pad_matrix_a; flags=FFTW.PATIENT)
-    Pi = plan_ifft(pad_matrix_a; flags=FFTW.PATIENT)
-
-    cj = 1
+    P = plan_fft(pad_matrix_a; flags=FFTW.MEASURE)
+    Pi = plan_ifft(pad_matrix_a; flags=FFTW.MEASURE)
+    
+    # Preallocations
+    size_R_1 = size(pad_matrix_a, 1) - 1
+    max_x1::Int32 = 0
+    max_y1::Int32 = 0
     sy, sx = size(A)
     dim_1 = ceil(Int32, (sy - N) / ((1 - ol) * N)) + 1
     dim_2 = ceil(Int32, (sx - M) / ((1 - ol) * M)) + 1
+    up = zeros(eltype(A), (dim_1, dim_2))
+    vp = zeros(eltype(A), (dim_1, dim_2))
+    SnR = zeros(eltype(A), (dim_1, dim_2))
+    Pkh = zeros(eltype(A), (dim_1, dim_2))
 
-    xp = zeros(eltype(A), (dim_1, dim_2))
-    yp = copy(xp); up = copy(xp); vp = copy(xp); SnR = copy(xp); Pkh = copy(xp)
-   
+    cj = 1
     # Main pass loop
     for jj in 1:((1 - ol) * N):sy - N + 1
         ci = 1
         for ii in 1:((1 - ol) * M):sx - M + 1
-
             if isnan(idx[cj, ci])
                 idx[cj, ci] = 0
             end
@@ -297,7 +304,6 @@ function finalpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, ol::Float32
             R = xcorrf2(E, F, P, Pi, pad_matrix_a, pad_matrix_b) ./ ( N * M * stad1 * stad2)
 
             if !any(isnan.(R)) & !all(x -> x == 0, R)
-
                 # Find position of maximal value of R
                 if size(R, 1) == (N - 1)
                     max_coords = findall(x -> x == maximum(R), R)
@@ -314,7 +320,6 @@ function finalpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, ol::Float32
                 # Sum the product of each x and y indice with its own indice within
                 # the max_coords vector.
                 if length(max_coords) > 1
-                    @show max_coords
                     max_x1 = round(Int32, 
                             sum([c[2]^2 for c in max_coords]) /
                             sum([c[2] for c in max_coords]))
@@ -357,7 +362,8 @@ function finalpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, ol::Float32
                     R2[max_y1 - 1: max_y1 + 1, max_x1 - 1: max_x1 + 1] .= NaN
                 end
 
-                if size(R, 1) == (N - 1)
+                # if size(R, 1) == (N - 1)
+                if size_R_1 == (N - 1)
                     max_val = maximum(R2)
                     p2_coords = findall(x -> x == max_val, R2)
                     if length(p2_coords) == 1
@@ -395,38 +401,39 @@ function finalpass(A::Matrix{Float32}, B::Matrix{Float32}, N::Int32, ol::Float32
                 SnR[cj, ci] = snr
                 up[cj, ci] = (-x_0 + idx[cj, ci]) / Dt
                 vp[cj, ci] = (-y_0 + idy[cj, ci]) / Dt
-                xp[cj, ci] = ii + (M / 2) - 1
-                yp[cj, ci] = jj + (N / 2) - 1
                 Pkh[cj, ci] = R[max_y1, max_x1]
-                
+
             else
                 up[cj, ci] = NaN
                 vp[cj, ci] = NaN
                 SnR[cj, ci] = NaN
                 Pkh[cj, ci] = 0
-                xp[cj, ci] = ii + M / 2 - 1
-                yp[cj, ci] = jj + N / 2 - 1
             end
             ci += 1
         end
         cj += 1
     end
-    return xp, yp, up, vp, SnR, Pkh
+    return up, vp, SnR, Pkh
 end
 
 
 # FOURIER
 """
-### pad_for_xcorr
+    pad_for_xcorr(trunc_matrix::Matrix{Float32})
+
     Determine the dimensions of a padded matrix to be used for xcorrf2. Depends
     on the dimensions of the current window size and the original array. Takes
     the current window size, scales it by a power of 2, then creates an array of 
     zeros that size. 
-    :params:
-        - trunc_matrix: The original matrix to be padded, but truncated down to\
-        the window's size. \n
-    :returns:
-        - A padded matrix of zeros.
+    
+    Parameters
+    ----------
+        trunc_matrix: The original matrix to be padded, but truncated down to 
+            the window's size. 
+
+    Returns
+    ----------
+        A padded matrix of zeros up to the next power of 2 of the window size.
 """
 function pad_for_xcorr(trunc_matrix::Matrix{Float32})
     ma, na = size(trunc_matrix)
@@ -435,26 +442,31 @@ function pad_for_xcorr(trunc_matrix::Matrix{Float32})
 end
 
 """
-### xcorrf2
+    xcorrf2(A, B, plan, iplan, pad_matrix_a, pad_matrix_b)
+
     Two-dimensional cross-correlation using Fourier transforms.
     XCORRF2(A,B) computes the crosscorrelation of matrices A and B.
-    If desired, you can pass in `None` for the parameter `plan`, opting to\
-    us the original "padding" method provided in MatPIV. This method is not \
-    nearly as effective in Julia and it's recommended that you use the plan.
-    \n**:params:**\n
-    A: matrix (2D array) to be compared.\n
-    B: matrix ((2D array)) to be compared.\n
-    plan: Callable function representing a pre-planned, omptimized FFT. Created \
-    using the dimensions of matrices A & B.
-    \n**:return:**\n
-    c: A matrix whose values reflect the 2D correlation between every cell \
-    in A & B. Matrix is 2D float 64.
 
-    Originally written in Matlab by,\n
-    Author(s): R. Johnson\n
+    Parameters
+    ----------
+    A: matrix (2D array) to be compared.
+    B: matrix ((2D array)) to be compared.
+    plan: Callable function representing a pre-planned, omptimized FFT. 
+        Created using the dimensions of matrices A & B.
+    iplan: Callable function representing a pre-planned, optimized inverse FFT.
+    
+    Returns
+    ----------
+    c: A matrix whose values reflect the 2D correlation between every cell in 
+        A & B.
+
+    Originally written in Matlab by,
+    Author(s): R. Johnson
     Revision: 1.0   Date: 1995/11/27
 """
-function xcorrf2(A, B, plan, iplan, pad_matrix_a, pad_matrix_b)
+function xcorrf2(A::Matrix{Float32}, B::Matrix{Float32}, plan, iplan, 
+        pad_matrix_a::Matrix{Float32}, pad_matrix_b::Matrix{Float32})
+
     # Unpack size() return tuple into appropriate variables
     ma, na = size(A)
     mb, nb = size(B)
@@ -473,7 +485,6 @@ function xcorrf2(A, B, plan, iplan, pad_matrix_a, pad_matrix_b)
     # Mult transforms and invert
     mult_at_bt = at.*bt
     c = iplan * mult_at_bt
-    # c = ifft(mult_at_bt)
 
     # Make all real
     c = real(c)
@@ -481,9 +492,38 @@ function xcorrf2(A, B, plan, iplan, pad_matrix_a, pad_matrix_b)
     # Trim
     rows = ma + mb
     cols = na + nb
-    # Keep everything from the first index to the index where padding began
     c = c[1:rows - 1, 1:cols - 1]
+
     return c
+end
+
+function xcorrf2!(R::Matrix{T}, A::Matrix{T}, B::Matrix{T}, plan!, iplan!, 
+        pad_matrix_a::Matrix{ComplexF32}, pad_matrix_b::Matrix{ComplexF32}, cj, ci) where {T}
+
+    # Unpack size() return tuple into appropriate variables
+    mb, nb = size(B)
+
+    # Reverse conjugate
+    B = conj(B[mb:-1:1, nb:-1:1])
+
+    # Transfer data from og matrix to optimized sized ones
+    pad_matrix_a[1:size(A,1), 1:size(A,2)] = A[1:size(A,1), 1:size(A,2)]
+    pad_matrix_b[1:size(B,1), 1:size(B,2)] = B[1:size(B,1), 1:size(B,2)]
+
+    # FFT in place
+    plan! * pad_matrix_a
+    plan! * pad_matrix_b
+
+    # Mult transforms and invert
+    pad_matrix_a .*= pad_matrix_b    
+    iplan! * pad_matrix_a
+
+    # Make all real and store in R
+    R .= real.(pad_matrix_a)
+
+    # Reset pads
+    fill!(pad_matrix_a, 0)
+    fill!(pad_matrix_b, 0)
 end
 
 
@@ -511,7 +551,7 @@ end
 
     Parameters:
     -----------
-    - u, v: `Matrices`\n
+    - u, v: `Matrices`
 
     Original author:
     ----------------
@@ -531,7 +571,7 @@ function linear_naninterp(u::Matrix{Float32}, v::Matrix{Float32})
     # physical values. Then we first interpolate those that have 8
     # neighbors, followed by 7, 6, 5, 4, 3, 2 and 1
     while !isempty(coords)
-        nei = zeros(Int64, length(coords), 3)
+        nei = zeros(Int32, length(coords), 3)
 
         # Check neighbors
         for i in eachindex(coords)
@@ -552,7 +592,7 @@ function linear_naninterp(u::Matrix{Float32}, v::Matrix{Float32})
             end
             
             # Create a matrix of NaN's 8 neighbors
-            ma = u[
+            ma::Matrix{Float32} = u[
                 py - 1 + cory1: py + 1 + cory2,
                 px - 1 + corx1: px + 1 + corx2
             ]
@@ -562,7 +602,7 @@ function linear_naninterp(u::Matrix{Float32}, v::Matrix{Float32})
             nei[i, 3] = py
         end
 
-        # Sort NEI by row to interpolate vectors with fewest spurious neighbors.
+        # Sort NEI by row to interpolate vectors with fewest spurious neighbors. -------------------------- CAN COMMENT OUT FOR PERFORMANCE. LOWERS OVERALL QUALITY A BIT THOUGH
         nei = sortslices(nei, dims=1, lt=Base.isgreater)
   
         # Reconstruct sorted outliers and interpolate 1st 50%.
@@ -609,31 +649,6 @@ function linear_naninterp(u::Matrix{Float32}, v::Matrix{Float32})
     return u, v
 end
 
-# Not currently used/functioning
-function naninterp(sample, pass)
-    nan_coords = findall(x -> isnan(x), sample)
-    non_nan_coords= findall(x -> !isnan(x), sample)
-    non_nan_coords_matrix = hcat([i[1] for i in non_nan_coords], [i[2] for i in non_nan_coords])
-    non_nan_vals= [sample[c] for c in non_nan_coords]
-    println("made it: 479") # Last place it gets past
-
-    # Debugging
-    if pass == 2
-        # writedlm("tests/juliaOut/second_pass_interp/stuck_sample.csv", sample, ',')
-        display(non_nan_coords_matrix)
-        display(non_nan_vals)
-    end
-
-    itp = ScatteredInterpolation.interpolate(InverseMultiquadratic(), non_nan_coords_matrix', non_nan_vals)
-    for c in nan_coords
-        c_extracted = [c[1]; c[2]]
-        itp_val_vec = ScatteredInterpolation.evaluate(itp, c_extracted)
-        itp_val = itp_val_vec[1]
-        sample[c] = itp_val
-    end
-
-    return sample
-end
 
 """
         regular_interp(samples, xs, ys, XI, YI)
@@ -651,9 +666,9 @@ end
 
     Returns
     ---------
-    - `itp_results::Array{Float64, 2}`: The interpolated values evaluated at the points defined by `XI` and `YI`.
+    - `itp_results`: The interpolated values evaluated at the points defined by `XI` and `YI`.
 """
-function regular_interp(samples, xs, ys, XI, YI)
+function regular_interp(samples::Matrix{Float32}, xs::T, ys::T, XI::T, YI::T) where {T}
     itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
     itp_results = [itp(yi, xi) for yi in YI, xi in XI]
     return itp_results
@@ -675,7 +690,7 @@ end
     `fine_YI`: A 1-dimensional array representing the fine grid in the y-direction.
     `fine_XI`: A 1-dimensional array representing the fine grid in the x-direction.
 """
-function build_grids_2(data)
+function build_grids_2(data::Matrix{Float32})
     coarse_y_dim = size(data, 1)
     coarse_x_dim = size(data, 2)
 
@@ -699,60 +714,22 @@ function build_grids_2(data)
 end
 
 """
-        build_grids(wins, overlap, sx, sy, i)
+    make_border(data::Matrix{Float32})
 
-    Build grids for interpolation.
+    Create a bordered matrix around the given data using the outside values of
+    the matrix. Copies the 1st/last rows and columns to the new matrix, then
+    fills in the interior with the original data.
 
-    Arguments
-    ---------
-    - `wins::Array{Float64,2}`: A matrix containing the window sizes for each iteration.
-    - `overlap::Float64`: The overlap between adjacent windows.
-    - `sx::Int`: The size of the x-axis.
-    - `sy::Int`: The size of the y-axis.
-    - `i::Int`: The index of the current window.
+    Parameters
+    ----------
+        data: A 2-dimensional array representing the data.
 
     Returns
-    ---------
-    - `X::Array{Float64,1}`: The x-coordinates of the coarse grid points.
-    - `Y::Array{Float64,1}`: The y-coordinates of the coarse grid points.
-    - `XI::Array{Float64,1}`: The x-coordinates of the fine interpolated grid points.
-    - `YI::Array{Float64,1}`: The y-coordinates of the fine interpolated grid points.
+    ----------
+        bordered_matrix: A 2-dimensional array representing the original matrix
+            with a border around it.
 """
-function build_grids(wins, overlap, sx, sy, i)
-        next_win_x = wins[i + 1, 1]
-        next_win_y = wins[i + 1, 2]
-
-        # Final window size is duplicated, so check for equality.
-        if wins[i, 1] != next_win_x
-            X = (1:((1 - overlap) * 2 * next_win_x):
-                    sx - 2 * next_win_x + 1) .+ next_win_x
-            XI = (1:((1 - overlap) * next_win_x):
-                    sx - next_win_x + 1) .+ (next_win_x / 2)
-        else
-            X = (1:((1 - overlap) * next_win_x):
-                    sx - next_win_x + 1) .+ (next_win_x / 2)
-            XI = (1:((1 - overlap) * next_win_x):
-                    sx - next_win_x + 1) .+ (next_win_x / 2)
-            X = copy(XI)
-        end
-
-        if wins[i, 2] != next_win_y
-            Y = (1:((1 - overlap) * 2 * next_win_y): 
-                    sy - 2 * next_win_y + 1) .+ next_win_y
-            YI = (1:((1 - overlap) * next_win_y):
-                    sy - next_win_y + 1) .+ (next_win_y / 2)
-        else
-            Y = (1:((1 - overlap) * next_win_y):
-                    sy - next_win_y + 1) .+ (next_win_y / 2)
-            YI = (1:((1 - overlap) * next_win_y):
-                    sy - next_win_y + 1) .+ (next_win_y / 2)
-            Y = copy(YI)
-        end
-
-    return X, Y, XI, YI
-end
-
-function make_border(data)
+function make_border(data::Matrix{Float32})
     # Allocate space for the bordered matrix
     bordered_matrix = zeros(Float64, (size(data, 1) + 2, size(data, 2) + 2))
 
@@ -774,7 +751,23 @@ function make_border(data)
     return bordered_matrix
 end
 
-function make_nan_border(data)
+
+"""
+    make_nan_border(data::Matrix{Float32})
+
+    Create a bordered matrix around the given data using NaN values. Fills the
+    center of the NaN matrix with the original data.
+    
+    Parameters
+    ----------
+        data: A 2-dimensional array representing the data.
+
+    Returns
+    ----------
+        bordered_matrix: A 2-dimensional array representing the original matrix
+            with a NaN border around it one element thick.
+"""
+function make_nan_border(data::Matrix{Float32})
     # Allocate space for the bordered matrix, make it NaNs then replace them
     bordered_matrix::Matrix{Float32} = fill(NaN, (size(data, 1) + 2, size(data, 2) + 2))
 
@@ -784,7 +777,7 @@ function make_nan_border(data)
 end
 
 """
-        globfilt(u, v)
+    globfilt(u::Matrix{Float32}, v::Matrix{Float32})
 
     Global histogram operator. Find the maximum and minimum velocities allowed 
     vector fields u and v. 
@@ -834,13 +827,16 @@ function globfilt(u::Matrix{Float32}, v::Matrix{Float32})
 end
 
 """
-### localfilt
-    Filter out vectors that deviate from the median or the mean of their \
-    surrounding neighbors by the factor `threshold` times the standard \
-    deviation of the neighbors.\n
+    localfilt(u::Matrix{Float32}, v::Matrix{Float32}, 
+                        threshold, median_bool=true, m=3)
+
+    Filter out vectors that deviate from the median or the mean of their 
+    surrounding neighbors by the factor `threshold` times the standard deviation
+    of the neighbors.
+
     Parameters:
     -----------
-    - x, y, u, v : `Matrices`
+    - u, v : `Matrices`
     - threshold : `Int`
         Specifies the point at which a vector has deviated too 
         far from the specified statistical mean or median.
@@ -855,17 +851,15 @@ end
         or mean value of each vector. Defaults to 3, though the
         original implementation mentions that 5 is a good number
         too. Also known as "kernelsize"
-    - mask : `Matrix`
-        Use to mask out areas of the given matrices to improve
-        computation times. Default to an empty matrix.
+
     Returns:
     --------
     - hu, hv : `Matrices`
             Successfully filtered matrices. New versions of u
             and v.
 """
-function localfilt(x, y, u::Matrix{Float32}, v::Matrix{Float32}, 
-                        threshold, median_bool=true, m=3, mask=[])
+function localfilt(u::Matrix{Float32}, v::Matrix{Float32}, 
+                        threshold::Int32, median_bool=true, m=3)
     IN = zeros(eltype(u), size(u))
 
     dim1 = round(Int32, size(u, 1) + 2 * floor(m/2))
@@ -930,15 +924,18 @@ function localfilt(x, y, u::Matrix{Float32}, v::Matrix{Float32},
 end
 
 """
-### intpeak
-    Interpolates correlation peaks in PIV.
+    intpeak(x1, y1, R, Rxm1, Rxp1, Rym1, Ryp1, N)
+
+    Interpolation uses Gaussian method.
+    Interpolates correlation peaks in PIV. 
+
     Parameters:
+    -----------
         x1, y1 : Maximual values in respective directions
         N : Interrogation window size
         Rxm1, Rxp1 : X-max values in matrix R "minus" or "plus" 1.
         Rym1, Ryp1 : Same as above but Y vals.
         R: Matrix resulting from xcorrf2.
-    Interpolation uses Gaussian method.
 
     Original Author:
     Time stamp: 12:32, Apr. 14, 2004.
@@ -948,14 +945,19 @@ end
     DAMTP, Univ. of Cambridge, UK
     Distributed under the GNU general public license.
 """
-function intpeak(x1, y1, R, Rxm1, Rxp1, Rym1, Ryp1, N)
+function intpeak(x1::Int32, y1::Int32, R::T, Rxm1::T, Rxp1::T, 
+                    Rym1::T, Ryp1::T, N::Int32) where {T}
     if length(N) == 2
         M = N[1]; N = N[2]
     else
         M = N
     end
-    x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / ((2 * log(Complex(Rxm1))) - (4 * log(R)) + (2 * log(Complex(Rxp1)))))
-    y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / ((2 * log(Complex(Rym1))) - (4 * log(R)) + (2 * log(Complex(Ryp1)))))
+    x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / 
+        ((2 * log(Complex(Rxm1))) - (4 * log(R)) + (2 * log(Complex(Rxp1)))))
+
+    y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / 
+        ((2 * log(Complex(Rym1))) - (4 * log(R)) + (2 * log(Complex(Ryp1)))))
+
     x0 = x01 - M
     y0 = y01 - N
 
@@ -974,7 +976,7 @@ end
     @PeterSimmon & @mbauman 07/23/2024
     https://discourse.julialang.org/t/median-of-complex-numbers-different-from-matlab-output/117352/5
 """
-function im_median_magnitude(collection::AbstractArray{Complex{T}}) where {T}
+function im_median_magnitude(collection::AbstractArray{ComplexF32})
     i = filter(x -> !isnan(x), collection)
     isempty(i) && return NaN
     n = length(i)
@@ -987,7 +989,7 @@ end
     Find the mean of the argued collection of complex numbers.
     If the collection is empty, returns NaN.
 """
-function im_mean(collection)
+function im_mean(collection::AbstractArray{ComplexF32})
     if length(collection) < 1
         return NaN
     end
@@ -1001,7 +1003,7 @@ end
     Find the std dev of the argued collection of complex numbers.
     If the collection is empty, returns NaN.
 """
-function im_std(collection)
+function im_std(collection::AbstractArray{ComplexF32})
     i = filter(x -> !isnan(x), collection)
 
     if length(i) > 0
@@ -1028,7 +1030,7 @@ end
         The standard deviation of the collection, excluding NaN values. If the 
         collection is empty or contains only NaN values, NaN is returned.
 """
-function nan_std(collection)
+function nan_std(collection::Vector{Float32})
     i = filter(x -> !isnan(x), collection)
     if length(i) > 0
         return std(i, corrected=false)
@@ -1050,7 +1052,7 @@ end
     - The mean of the collection, excluding NaN values. If the collection is 
     empty or contains only NaN values, NaN is returned.
 """
-function nan_mean(collection)
+function nan_mean(collection::Vector{Float32})
     i = filter(x -> !isnan(x), collection)
     if length(i) > 0
         return mean(i)
@@ -1088,19 +1090,23 @@ function main(A::Matrix{T}, B::Matrix{T}) where {T}
 
     # other input params for piv
     dt::Int32 = 1; overlap::Float32 = 0.5; validvec::Int32 = 3
-    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
+    u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
     # Reject data with too-low signal-to-noise level
-    snrthresh::Float32 = 1.3  # OG
-    ibad = findall(x -> x < snrthresh, SnR)
-    u[ibad] .= NaN
-    v[ibad] .= NaN
+    snrthresh::Float32 = 1.3
+    u .= ifelse.(SnR .< snrthresh, NaN, u)
+    v .= ifelse.(SnR .< snrthresh, NaN, v)
+    # ibad = findall(x -> x < snrthresh, SnR)
+    # u[ibad] .= NaN
+    # v[ibad] .= NaN
 
     # Reject data with too-low correlation peak height
     pkhthresh::Float32 = 0.3
-    ibad = findall(x -> x < pkhthresh, Pkh)
-    u[ibad] .= NaN
-    v[ibad] .= NaN
+    u .= ifelse.(Pkh .< pkhthresh, NaN, u)
+    v .= ifelse.(Pkh .< pkhthresh, NaN, v)
+    # ibad = findall(x -> x < pkhthresh, Pkh)
+    # u[ibad] .= NaN
+    # v[ibad] .= NaN
 
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
