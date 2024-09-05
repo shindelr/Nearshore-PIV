@@ -643,9 +643,21 @@ end
     - `itp_results`: The interpolated values evaluated at the points defined by `XI` and `YI`.
 """
 function regular_interp(samples::Matrix{Float32}, xs::T, ys::T, XI::T, YI::T) where {T}
-    itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
-    itp_results = [itp(yi, xi) for yi in YI, xi in XI]
-    return itp_results
+    try
+        itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
+        itp_results = [itp(yi, xi) for yi in YI, xi in XI]
+        return itp_results
+    catch e
+        try
+            knots = (yi, xi)
+            Interpolations.deduplicate_knots!(knots)
+            itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
+            itp_results = [itp(yi, xi) for yi in YI, xi in XI]
+            return itp_results
+        catch e
+            println("Error in regular_interp: ", e)
+        end
+    end
 end
 
 """
@@ -1085,21 +1097,20 @@ function main(A::Matrix{T}, B::Matrix{T}) where {T}
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
     
-    u_map = heatmap(u, 
-                    title = "u [pixels/frame]", 
-                    aspect_ratio = :equal, 
-                    limits=(0, 200), 
-                    xlimits=(0, 385))
+    # u_map = heatmap(u, 
+    #                 title = "u [pixels/frame]", 
+    #                 aspect_ratio = :equal, 
+    #                 limits=(0, 200), 
+    #                 xlimits=(0, 385))
 
-    v_map = heatmap(v, 
-                    title = "v [pixels/frame]", 
-                    aspect_ratio = :equal, 
-                    ylimits=(0, 200), 
-                    xlimits=(0, 385))
+    # v_map = heatmap(v, 
+    #                 title = "v [pixels/frame]", 
+    #                 aspect_ratio = :equal, 
+    #                 ylimits=(0, 200), 
+    #                 xlimits=(0, 385))
     
     # Display side-by-side
     # display(plot(u_map, v_map, layout = (2, 1)))
-    return plot(u_map, v_map, layout = (2, 1))
 end
 
 end
