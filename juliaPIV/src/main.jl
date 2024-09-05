@@ -1,3 +1,6 @@
+module JuliaPIV
+export main
+
 # Third party modules
 using Statistics
 using FFTW            # Fast Fourier Transforms library built on C
@@ -37,8 +40,8 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
 
     # Initial passes are for removing large-scale displacements. Initialize
     # displacements (datax,datay) to zero
-    data_dim_1::Int32 = sy/(wins[1] * (1-overlap))
-    data_dim_2::Int32 = sx/(wins[1] * (1-overlap))
+    data_dim_1::Int32 = round(Int32, sy/(wins[1] * (1-overlap)))
+    data_dim_2::Int32 = round(Int32, sx/(wins[1] * (1-overlap)))
     datax = zeros(Float32, (data_dim_1, data_dim_2))
     datay = copy(datax)
 
@@ -924,10 +927,10 @@ function intpeak(x1::Int32, y1::Int32, R::T, Rxm1::T, Rxp1::T,
         M = N
     end
     x01 = x1 + ((log(Complex(Rxm1)) - log(Complex(Rxp1))) / 
-        ((2 * log(Complex(Rxm1))) - (4 * log(R)) + (2 * log(Complex(Rxp1)))))
+        ((2 * log(Complex(Rxm1))) - (4 * log(Complex(R))) + (2 * log(Complex(Rxp1)))))
 
     y01 = y1 + ((log(Complex(Rym1)) - log(Complex(Ryp1))) / 
-        ((2 * log(Complex(Rym1))) - (4 * log(R)) + (2 * log(Complex(Ryp1)))))
+        ((2 * log(Complex(Rym1))) - (4 * log(Complex(R))) + (2 * log(Complex(Ryp1)))))
 
     x0 = x01 - M
     y0 = y01 - N
@@ -1095,12 +1098,14 @@ function main(A::Matrix{T}, B::Matrix{T}) where {T}
                     xlimits=(0, 385))
     
     # Display side-by-side
-    display(plot(u_map, v_map, layout = (2, 1)))
+    # display(plot(u_map, v_map, layout = (2, 1)))
+    return plot(u_map, v_map, layout = (2, 1))
 end
 
+end
 
 # ------ MAIN SCRIPT ------
-function run_piv()
+function julia_main()
 
     IM1::String = "juliaPIV/data/im1.jpg"
     IM2::String = "juliaPIV/data/im2.jpg"
@@ -1110,5 +1115,5 @@ function run_piv()
     main(IM1_M, IM2_M)
 end
 
-timed_run() = @time run_piv()
-timed_run()
+# timed_run() = @time julia_main()
+# timed_run()
