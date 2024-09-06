@@ -302,7 +302,7 @@ function finalpass(A::Matrix{T}, B::Matrix{T}, N::Int32, ol::Float32,
             E = E.-mean(E); F = D2.-mean(D2)
 
             # Cross correlate and FFT
-            R = xcorrf2(E, F, P, Pi, pad_matrix_a, pad_matrix_b) ./ ( N * M * stad1 * stad2)
+            R::Matrix{Float32} = xcorrf2(E, F, P, Pi, pad_matrix_a, pad_matrix_b) ./ ( N * M * stad1 * stad2)
 
             if !any(isnan.(R)) & !all(x -> x == 0, R)
                 max_coords = Vector{Tuple{Int32, Int32}}()
@@ -441,8 +441,9 @@ end
 function pad_for_xcorr(trunc_matrix::Matrix{Float32})
     ma, na = size(trunc_matrix)
     mf = nextpow(2, ma + na)  
-    return zeros(eltype(trunc_matrix), (mf, mf)) 
+    return zeros(eltype(ComplexF32), mf, mf) 
 end
+
 
 """
     xcorrf2(A, B, plan, iplan, pad_matrix_a, pad_matrix_b)
@@ -468,7 +469,7 @@ end
     Revision: 1.0   Date: 1995/11/27
 """
 function xcorrf2(A::Matrix{Float32}, B::Matrix{Float32}, plan, iplan, 
-        pad_matrix_a::Matrix{Float32}, pad_matrix_b::Matrix{Float32})
+        pad_matrix_a::Matrix{ComplexF32}, pad_matrix_b::Matrix{ComplexF32})
 
     # Unpack size() return tuple into appropriate variables
     ma, na = size(A)
@@ -481,23 +482,10 @@ function xcorrf2(A::Matrix{Float32}, B::Matrix{Float32}, plan, iplan,
     pad_matrix_a[1:size(A,1), 1:size(A,2)] = A[1:size(A,1), 1:size(A,2)]
     pad_matrix_b[1:size(B,1), 1:size(B,2)] = B[1:size(B,1), 1:size(B,2)]
 
-    # Runs optimized FFTs using the plan
-    at = plan * pad_matrix_b
-    bt = plan * pad_matrix_a
-
-    # Mult transforms and invert
-    mult_at_bt = at.*bt
-    c = iplan * mult_at_bt
-
-    # Make all real
-    c = real(c)
-
-    # Trim
-    rows = ma + mb
-    cols = na + nb
-    c = c[1:rows - 1, 1:cols - 1]
-
-    return c
+    # Performs FFTs, inverse FFT, then trim the result
+    # I did it this weird way to avoid four array allocations
+    return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
+                )[1:ma + mb - 1, 1:na + nb - 1]
 end
 
 
@@ -577,7 +565,7 @@ function linear_naninterp(u::Matrix{Float32}, v::Matrix{Float32})
         end
 
         # Sort NEI by row to interpolate vectors with fewest spurious neighbors. -------------------------- CAN COMMENT OUT FOR PERFORMANCE. LOWERS OVERALL QUALITY A BIT THOUGH
-        nei = sortslices(nei, dims=1, lt=Base.isgreater)
+        nei::Matrix{Int32} = sortslices(nei, dims=1, lt=Base.isgreater)
   
         # Reconstruct sorted outliers and interpolate 1st 50%.
         idx = findall(x -> x >= 8, nei[:, 1])
@@ -1049,7 +1037,24 @@ function nan_mean(collection::Vector{Float32})
     return NaN
 end
 
+"""
+    fast_max!(max_coords::Vector{Tuple{Int32, Int32}}, collection::Matrix{Float32})
 
+    This function finds the maximum value in the given `collection` matrix and 
+    updates the `max_coords` vector with the coordinates of the maximum value. 
+    If there are multiple maximum values, all their coordinates are added to the 
+    `max_coords` vector.
+
+Arguments
+---------
+- `max_coords::Vector{Tuple{Int32, Int32}}`: A vector to store the coordinates 
+                                                of the maximum value(s).
+- `collection::Matrix{Float32}`: The matrix in which to find the maximum value(s).
+
+Returns
+--------
+- `max_coords::Vector{Tuple{Int32, Int32}}`: The updated vector containing the coordinates of the maximum value(s).
+"""
 function fast_max!(max_coords::Vector{Tuple{Int32, Int32}}, collection::Matrix{Float32})
     max_val::Float64 = -Inf
     for i in axes(collection, 1)
