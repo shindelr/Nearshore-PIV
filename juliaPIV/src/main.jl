@@ -1,6 +1,3 @@
-module JuliaPIV
-export main
-
 # Third party modules
 using Statistics
 using FFTW            # Fast Fourier Transforms library built on C
@@ -162,18 +159,19 @@ function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32,
                 end
 
                 # Call xcorrf2, passing in the FFT plan and normalize result
-                R = xcorrf2(C, D, P, Pi, pad_matrix_a, pad_matrix_b) ./ ( N * M * stad1 * stad2)
+                R::Matrix{Float32} = xcorrf2(C, D, P, Pi, pad_matrix_a, pad_matrix_b) ./ ( N * M * stad1 * stad2)
 
                 # Find position of maximal value of R
-                if size(R, 1) == (N - 1)  # I think checking for second to last pass
-                    max = maximum(R)
-                    max_coords = findall(x -> x == max, R)
+                max_coords = Vector{Tuple{Int32, Int32}}()
+                if size(R, 1) == (N - 1)
+                    fast_max!(max_coords, R)
                 else
                     subset = R[Int32(.5*N+2):Int32(1.5*N-3), 
                                 Int32(.5*M+2):Int32(1.5*M-3)]
-                    max = maximum(subset)
-                    max_coords = findall(x -> x == max, subset)
-                    max_coords = [(i[1] + Int32(0.5*N+1), i[2] + Int32(0.5*M+1)) for i in max_coords]
+                    fast_max!(max_coords, subset)
+                    # Adjust for subset positions
+                    max_coords = [(i[1] + Int32(0.5*N+1), i[2] + Int32(0.5*M+1)) 
+                                    for i in max_coords]
                 end
 
                 # Handle a vector that has multiple maximum coordinates.
@@ -307,16 +305,18 @@ function finalpass(A::Matrix{T}, B::Matrix{T}, N::Int32, ol::Float32,
             R = xcorrf2(E, F, P, Pi, pad_matrix_a, pad_matrix_b) ./ ( N * M * stad1 * stad2)
 
             if !any(isnan.(R)) & !all(x -> x == 0, R)
+                max_coords = Vector{Tuple{Int32, Int32}}()
                 # Find position of maximal value of R
                 if size(R, 1) == (N - 1)
-                    max_coords = findall(x -> x == maximum(R), R)
+                    fast_max!(max_coords, R)
                 else
                     subset = R[Int32(.5 * N + 2):Int32(1.5 * N - 3), 
                                 Int32(.5 * M + 2):Int32(1.5 * M - 3)]
+                    fast_max!(max_coords, subset)
 
-                    # max_coords::Vector{Tuple{Int32, Int32}} = findall(x -> x == maximum(subset), subset)
-                    max_coords = findall(x -> x == maximum(subset), subset)
-                    max_coords = [(i[1] + Int32(0.5*N+1), i[2] + Int32(0.5*M+1)) for i in max_coords]
+                    # Adjust indices for subset
+                    max_coords = [(i[1] + Int32(0.5 * N + 1), i[2] + Int32(0.5 * M + 1)) 
+                                for i in max_coords]
                 end
 
                 # Handle a vector that has multiple maximum coordinates.
@@ -602,16 +602,19 @@ function linear_naninterp(u::Matrix{Float32}, v::Matrix{Float32})
                 corx1 = 0; corx2 = -1
             end
 
-            temp_u::Matrix{Float32} = u[py[j] - 1 + cory1:py[j] + 1 + cory2, 
-                    px[j] - 1 + corx1:px[j] + 1 + corx2] 
-            temp_v::Matrix{Float32} = v[py[j] - 1 + cory1:py[j] + 1 + cory2, 
-                    px[j] - 1 + corx1:px[j] + 1 + corx2] 
-            
-            mean_prep_u = filter(!isnan, temp_u[:])
-            mean_prep_v = filter(!isnan, temp_v[:])
-            u[py[j], px[j]] = mean(mean_prep_u)
-            v[py[j], px[j]] = mean(mean_prep_v)
-            
+            # Super hard to read but nice and fancy fast way to take the mean
+            # of all the non-NaN values in the area of interest.
+            u[py[j], px[j]] = mapreduce(x->isnan(x) ? 0 : x, +, 
+                                u[py[j] - 1 + cory1:py[j] + 1 + cory2, 
+                                px[j] - 1 + corx1:px[j] + 1 + corx2]) / 
+                                count(!isnan, u[py[j] - 1 + cory1:py[j] + 1 + cory2, 
+                                                px[j] - 1 + corx1:px[j] + 1 + corx2])
+            v[py[j], px[j]] = mapreduce(x->isnan(x) ? 0 : x, +,
+                                        v[py[j] - 1 + cory1:py[j] + 1 + cory2, 
+                                        px[j] - 1 + corx1:px[j] + 1 + corx2]) / 
+                                count(!isnan, v[py[j] - 1 + cory1:py[j] + 1 + cory2, 
+                                                px[j] - 1 + corx1:px[j] + 1 + corx2])
+
             if lp > numm
                 u[py[j], px[j]] = 0
                 v[py[j], px[j]] = 0
@@ -655,7 +658,7 @@ function regular_interp(samples::Matrix{Float32}, xs::T, ys::T, XI::T, YI::T) wh
             itp_results = [itp(yi, xi) for yi in YI, xi in XI]
             return itp_results
         catch e
-            println("Error in regular_interp: ", e)
+            error("Error in regular_interp: ", e)
         end
     end
 end
@@ -1047,6 +1050,26 @@ function nan_mean(collection::Vector{Float32})
 end
 
 
+function fast_max!(max_coords::Vector{Tuple{Int32, Int32}}, collection::Matrix{Float32})
+    max_val::Float64 = -Inf
+    for i in axes(collection, 1)
+        for j in axes(collection, 2)
+            if collection[i, j] > max_val
+                max_val = collection[i, j]
+                empty!(max_coords)
+                push!(max_coords, (i, j))
+            else
+                if collection[i, j] == max_val
+                    push!(max_coords, (i , j))
+                end
+            end
+        end
+
+    end
+    return max_coords
+end
+
+
 # MAIN
 """
 ### Main Entry
@@ -1082,49 +1105,41 @@ function main(A::Matrix{T}, B::Matrix{T}) where {T}
     snrthresh::Float32 = 1.3
     u .= ifelse.(SnR .< snrthresh, NaN, u)
     v .= ifelse.(SnR .< snrthresh, NaN, v)
-    # ibad = findall(x -> x < snrthresh, SnR)
-    # u[ibad] .= NaN
-    # v[ibad] .= NaN
 
     # Reject data with too-low correlation peak height
     pkhthresh::Float32 = 0.3
     u .= ifelse.(Pkh .< pkhthresh, NaN, u)
     v .= ifelse.(Pkh .< pkhthresh, NaN, v)
-    # ibad = findall(x -> x < pkhthresh, Pkh)
-    # u[ibad] .= NaN
-    # v[ibad] .= NaN
 
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
     
-    # u_map = heatmap(u, 
-    #                 title = "u [pixels/frame]", 
-    #                 aspect_ratio = :equal, 
-    #                 limits=(0, 200), 
-    #                 xlimits=(0, 385))
+    u_map = heatmap(u, 
+                    title = "u [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    limits=(0, 200), 
+                    xlimits=(0, 385))
 
-    # v_map = heatmap(v, 
-    #                 title = "v [pixels/frame]", 
-    #                 aspect_ratio = :equal, 
-    #                 ylimits=(0, 200), 
-    #                 xlimits=(0, 385))
+    v_map = heatmap(v, 
+                    title = "v [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    ylimits=(0, 200), 
+                    xlimits=(0, 385))
     
     # Display side-by-side
-    # display(plot(u_map, v_map, layout = (2, 1)))
-end
-
+    display(plot(u_map, v_map, layout = (2, 1)))
 end
 
 # ------ MAIN SCRIPT ------
 function julia_main()
-
     IM1::String = "juliaPIV/data/im1.jpg"
     IM2::String = "juliaPIV/data/im2.jpg"
+
     IM1_M::Matrix{Gray{N0f8}} = load(IM1)
     IM2_M::Matrix{Gray{N0f8}} = load(IM2)
 
     main(IM1_M, IM2_M)
 end
 
-# timed_run() = @time julia_main()
-# timed_run()
+timed_run() = @time julia_main()
+timed_run()
