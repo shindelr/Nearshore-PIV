@@ -5,3 +5,4 @@ TODO.txt
 tests/juliaOut/
 tests/mlabOut/
 tests/test_data
+tests/pipline_utility_testing

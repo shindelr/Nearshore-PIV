@@ -1,3 +1,6 @@
+
+module JuliaPIV
+export julia_main
 # Third party modules
 using Statistics
 using FFTW            # Fast Fourier Transforms library built on C
@@ -1118,33 +1121,43 @@ function main(A::Matrix{T}, B::Matrix{T}) where {T}
 
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
-    
-    u_map = heatmap(u, 
-                    title = "u [pixels/frame]", 
-                    aspect_ratio = :equal, 
-                    limits=(0, 200), 
-                    xlimits=(0, 385))
 
-    v_map = heatmap(v, 
-                    title = "v [pixels/frame]", 
-                    aspect_ratio = :equal, 
-                    ylimits=(0, 200), 
-                    xlimits=(0, 385))
+    return u, v
+    # u_map = heatmap(u, 
+    #                 title = "u [pixels/frame]", 
+    #                 aspect_ratio = :equal, 
+    #                 limits=(0, 200), 
+    #                 xlimits=(0, 385))
+
+    # v_map = heatmap(v, 
+    #                 title = "v [pixels/frame]", 
+    #                 aspect_ratio = :equal, 
+    #                 ylimits=(0, 200), 
+    #                 xlimits=(0, 385))
     
-    # Display side-by-side
-    display(plot(u_map, v_map, layout = (2, 1)))
+    # # Display side-by-side
+    # display(plot(u_map, v_map, layout = (2, 1)))
 end
 
-# ------ MAIN SCRIPT ------
-function julia_main()
-    IM1::String = "juliaPIV/data/im1.jpg"
-    IM2::String = "juliaPIV/data/im2.jpg"
+# ------ MAIN SCRIPT ------ 
+# function julia_main(IM1_PATH::String, IM2_PATH::String, DIR::String)
+function julia_main(image_pair)
+# function julia_main()
+    # IM1::String = "juliaPIV/data/im1.jpg"
+    # IM2::String = "juliaPIV/data/im2.jpg"
 
-    IM1_M::Matrix{Gray{N0f8}} = load(IM1)
-    IM2_M::Matrix{Gray{N0f8}} = load(IM2)
+    # IM1_M::Matrix{Gray{N0f8}} = load(IM1)
+    # IM2_M::Matrix{Gray{N0f8}} = load(IM2)
+    # IM1_M::Matrix{Gray{N0f8}} = load("$DIR$IM1_PATH")
+    # IM2_M::Matrix{Gray{N0f8}} = load("$DIR$IM2_PATH")
+
+    IM1_M = image_pair[1]
+    IM2_M = image_pair[2]
 
     main(IM1_M, IM2_M)
 end
 
-timed_run() = @time julia_main()
-timed_run()
+end
+
+# timed_run() = @time JuliaPIV.julia_main()
+# timed_run()
