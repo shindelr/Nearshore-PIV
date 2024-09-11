@@ -4,5 +4,5 @@ scratch/
 TODO.txt
 tests/juliaOut/
 tests/mlabOut/
-tests/test_data
-tests/pipline_utility_testing
+tests/test_data/
+tests/pipeline_utility_testing/

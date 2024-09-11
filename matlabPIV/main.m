@@ -65,13 +65,15 @@ v(ibad)=nan;
 clf
 pause(.5)
 subplot(211)
-% pcolor(u),sf      % error: var sf undefined? 
-pcolor(u), shading flat
-title('u [pixels/frame]')
+% pcolor(u), shading flat
+pcolor(x), shading flat
+% title('u [pixels/frame]')
+title('x')
 subplot(212)
-% pcolor(v),sf
-pcolor(v), shading flat
-title('v [pixels/frame]')
+% pcolor(v), shading flat
+pcolor(y), shading flat
+% title('v [pixels/frame]')
+title('y')
 for i=1:2
   subplot(2,1,i)
   axis equal tight
