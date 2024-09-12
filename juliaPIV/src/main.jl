@@ -1154,7 +1154,6 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     # push!(pass_sizes, pass_sizes[end]) # Duplicate final element
     push!(pass_sizes, final_win_size) # Duplicate final element
 
-
     # other input params for piv
     dt::Int32 = 1
     overlap::Float32 = ol
