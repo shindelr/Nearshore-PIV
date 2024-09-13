@@ -13,34 +13,58 @@ using .JuliaPIV
 
 function get_raw_images(PATH::String)::Vector{String}
     files::Vector{String} = readlines(PATH)
+    @show PATH
     prefix_dir = "tests/pipeline_utility_testing/"
     # Get raw images and prepend the test directory
     return ["$prefix_dir$file" for file in files]
 end
 
-function crop_and_pair_images(images::Vector{String}, crop_factor::NTuple{4, Int32})
-    cropped = Vector()
-    cropped_pairs = Vector()
-    for file_path in images
-        img::Matrix{Gray{N0f8}} = load(file_path)
-        img = img[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
-        push!(cropped, img)
+function crop_and_pair_images(images::Vector{String}, crop_factor::NTuple{4, Int32})::Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}
+    image_pairs = Dict{Int32, Tuple{String, String, Matrix{Gray{N0f8}}, Matrix{Gray{N0f8}}}}()
+    i = 1
+    count = 1
+    while i < length(images)
+        img1 = load(images[i])
+        img2= load(images[i+1])
+        img1 = img1[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
+        img2 = img2[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
+        image_pairs[count] = (images[i], images[i+1], Gray.(img1), Gray.(img2))
+        i += 2
+        count += 1
     end
 
-    for i in 1:length(cropped)-1
-        push!(cropped_pairs, (cropped[i], cropped[i+1]))
-    end
-
-    return cropped_pairs
+    @assert length(image_pairs) == length(images) ÷ 2 "Length of image pairs should be half the length of images"
+    return [(image_pairs[i][3], image_pairs[i][4]) for i in eachindex(image_pairs)]
 end
 
-function statistics_of_piv(piv_results, n::Int32)
+function crop_and_group_images(images::Vector{String}, crop_factor::NTuple{4, Int32}, N::Int32)
+    # image_groups = Dict{Int32, Vector{Matrix}}()
+    image_groups = Vector{Vector{Matrix{Gray{N0f8}}}}()
+    i = 1
+    count = 1
+    while i < length(images)
+        j = 1
+        group = Vector{Matrix{Gray{N0f8}}}()
+        # group --> Vector(matrix_j)
+        while j <= N
+            img_name = images[i + j - 1]
+            img = load(img_name)
+            img = img[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
+            push!(group, Gray.(img)) 
+            j += 1
+        end
+        # image_groups[count] = group
+        push!(image_groups, group)
+        i += N
+        count += 1
+    end
+    @assert length(image_groups) == length(images) ÷ N "Number of groups should be $(length(images)) ÷ $N"
+    return image_groups
+end
+
+function statistics_of_piv_pairs(piv_results)
     println("Calculating statistics...")
     # Preallocations
-    xs = Vector{Matrix{Float32}}()
-    ys = Vector{Matrix{Float32}}()
-    us = Vector{Matrix{Float32}}()
-    vs = Vector{Matrix{Float32}}()
     u_avs = Vector{Matrix{Float32}}()
     u_stds = Vector{Matrix{Float32}}()
     v_avs = Vector{Matrix{Float32}}()
@@ -50,6 +74,7 @@ function statistics_of_piv(piv_results, n::Int32)
     npts = Vector{Matrix{Int32}}()
 
     # Unpack results
+    xs, ys, us, vs = [], [], [], []
     for result in piv_results
         push!(xs, result[1][1])
         push!(ys, result[1][2])
@@ -60,12 +85,12 @@ function statistics_of_piv(piv_results, n::Int32)
     # Calculate statistics
     i = 1
     while i <= length(us)
-        # Make groups of N results for averages, stds, etc.
-        un_group = us[i:min(i+n-1, length(us))]
-        vn_group = vs[i:min(i+n-1, length(us))]
-        xn_group = xs[i:min(i+n-1, length(us))]
-        yn_group = ys[i:min(i+n-1, length(us))]
-
+        # Make groups of 2 results for averages, stds, etc.
+        un_group = us[i:min(i+1, length(us))]
+        vn_group = vs[i:min(i+1, length(us))]
+        xn_group = xs[i:min(i+1, length(us))]
+        yn_group = ys[i:min(i+1, length(us))]
+        
         # Create binary masks for each matrix in u-group
         nan_binary_masks = Vector{Matrix{Bool}}([isnan.(u) for u in un_group])
         push!(npts, sum(nan_binary_masks))
@@ -78,8 +103,50 @@ function statistics_of_piv(piv_results, n::Int32)
         push!(x_avs, mean(xn_group))
         push!(y_avs, mean(yn_group))
 
-        # Increment by N to get the appropriate num of averages etc.
-        i += n
+        i += 1
+    end
+    
+    return ((x_avs, y_avs), (u_avs, v_avs), (u_stds, v_stds), npts)
+end
+
+function statistics_of_piv_groups(piv_results, N::Int32)
+    println("Calculating statistics...")
+    # Preallocations
+    u_avs = Vector{Matrix{Float32}}()
+    u_stds = Vector{Matrix{Float32}}()
+    v_avs = Vector{Matrix{Float32}}()
+    v_stds = Vector{Matrix{Float32}}()
+    x_avs = Vector{Matrix{Float32}}()
+    y_avs = Vector{Matrix{Float32}}()
+    npts = Vector{Matrix{Int32}}()
+
+    # Unpack results
+    xs, ys, us, vs = [], [], [], []
+    for result in piv_results
+        push!(xs, result[1][1])
+        push!(ys, result[1][2])
+        push!(us, result[2][1])
+        push!(vs, result[2][2])
+    end
+
+    # Calculate statistics, partition groups by size N
+    for (un_group, vn_group, xn_group, yn_group) in zip(
+        Iterators.partition(us, N), 
+        Iterators.partition(vs, N), 
+        Iterators.partition(xs, N), 
+        Iterators.partition(ys, N))
+
+        # Create binary masks for each matrix in u-group
+        nan_binary_masks = Vector{Matrix{Bool}}([isnan.(u) for u in un_group])
+        push!(npts, sum(nan_binary_masks))
+
+        # Compute averages and stds
+        push!(u_avs, mean(un_group))
+        push!(u_stds, std(un_group))
+        push!(v_avs, mean(vn_group))
+        push!(v_stds, std(vn_group))
+        push!(x_avs, mean(xn_group))
+        push!(y_avs, mean(yn_group))
     end
     
     return ((x_avs, y_avs), (u_avs, v_avs), (u_stds, v_stds), npts)
@@ -87,11 +154,12 @@ end
 
 function heatmap_mult_images(images::Vector{Matrix{Float32}}, title::String)
     for im in images
-        display(plot(heatmap(im, 
+        j = plot(heatmap(im, 
                 title = title, 
                 aspect_ratio = :equal, 
                 limits=(0, 200), 
-                xlimits=(0, 385))))
+                xlimits=(0, 385)))
+        display(j)
     end
 end
 
@@ -109,47 +177,69 @@ end
 function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
     ol::Float32, out_dir::String, in_path::String) where {T}
 
+    # Preallocate results from PIV
+    raw_piv_results = Vector{Tuple{
+                             Tuple{Matrix{T}, Matrix{T}}, 
+                             Tuple{Matrix{T}, Matrix{T}}, 
+                             Vector{Int32}
+                             } where {T}}()
+
     # Image pre-processing
     images = get_raw_images(in_path)
     if length(images) ÷ N <= 1
         error("\n\nNumber of images in directory ($(length(images))) not divisible by N ($N).\n\n")
     end
-    cropped_pairs = crop_and_pair_images(images, crop_factor)
 
-    # PIV, could thread here?
-    raw_piv_results = Vector{Tuple{Tuple{Matrix{T}, Matrix{T}}, Tuple{Matrix{T}, 
-                                Matrix{T}}, Vector{Int32}} where {T}}()
+    if N == 2
+        cropped_pairs = crop_and_pair_images(images, crop_factor)
+        @assert length(cropped_pairs) == length(images) ÷ 2 "Length of cropped pairs should be half the length of images"
+        Threads.@threads for pair in cropped_pairs
+            push!(raw_piv_results, JuliaPIV.main(pair, Int32(final_win_size), Float32(ol)))
+        end
+        # PIV stats
+        ((x_avs, y_avs),
+        (u_avs, v_avs), 
+        (u_stds, v_stds), 
+         npts) = statistics_of_piv_pairs(raw_piv_results)
 
-    Threads.@threads for pair in cropped_pairs
-        push!(raw_piv_results, JuliaPIV.main(pair, Int32(final_win_size), Float32(ol)))
+    elseif N > 2
+        image_groups = crop_and_group_images(images, crop_factor, N)
+        Threads.@threads for group in image_groups
+            for i in (1:length(group)-1)
+                push!(raw_piv_results, JuliaPIV.main((group[i], group[i+1]), Int32(final_win_size), Float32(ol)))
+            end
+        end
+        # PIV stats
+        ((x_avs, y_avs), 
+        (u_avs, v_avs), 
+        (u_stds, v_stds), 
+        npts) = statistics_of_piv_groups(raw_piv_results, N)
+
+    else
+        error("N should be greater than 1")
     end
 
-    # npts = count_nan(raw_piv_results[])
-    ((x_avs, y_avs), (u_avs, v_avs), (u_stds, v_stds), npts) = statistics_of_piv(raw_piv_results, N)
-
     image_names = parse_image_names(images, N)
-    @assert length(image_names) == length(x_avs) "$length(image_names) != $length(x_avs)"
+    @assert length(image_names) == length(x_avs) "$(length(image_names)) != $(length(x_avs))"
+    pass_sizes = [raw_piv_results[1][3] raw_piv_results[1][3]]
 
     println("Building $(length(x_avs)) .mat files from 1 batch...")
     for i in eachindex(x_avs)
         mat_dict = Dict(
             "x" => x_avs[i],
             "y" => y_avs[i],
-            "pass_sizes" => raw_piv_results[i][3],
+            "pass_sizes" => pass_sizes,
             "overlap" => ol,
             "method" => "multin",
-            "fn" => images,
+            "fn" => image_names,
             "u" => u_avs[i],
             "v" => v_avs[i],
             "npts" => npts[i],
             "uStd" => u_stds[i],
             "vStd" => v_stds[i]
         )
-        # Crazy indexing to get the correct filename
         MAT.matwrite("$out_dir$(image_names[i]).mat", mat_dict)
     end
-
-
 end
 
 # MULTIBATCH
@@ -161,24 +251,48 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
     
     # Image pre-processing
     for batch in batches
+        # Preallocate results from PIV
+        raw_piv_results = Vector{Tuple{
+                                Tuple{Matrix{T}, Matrix{T}}, 
+                                Tuple{Matrix{T}, Matrix{T}}, 
+                                Vector{Int32}
+                                } where {T}}()
+                  
+        # Get batch of raw images
         in_path = "$in_dir$batch" 
         images = get_raw_images(in_path)
         if length(images) ÷ N <= 1
             error("\n\nNumber of images in batch ($(length(images))) not divisible by N ($N).\n\n")
         end
-        cropped_pairs = crop_and_pair_images(images, crop_factor)
 
-        # Preallocate results from PIV
-        raw_piv_results = Vector{Tuple{Tuple{Matrix{T}, Matrix{T}}, Tuple{Matrix{T}, 
-        Matrix{T}}, Vector{Int32}} where {T}}()
+        if N == 2
+            cropped_pairs = crop_and_pair_images(images, crop_factor)
+            @assert length(cropped_pairs) == length(images) ÷ 2 "Length of cropped pairs should be half the length of images"
+            Threads.@threads for pair in cropped_pairs
+                push!(raw_piv_results, JuliaPIV.main(pair, Int32(final_win_size), Float32(ol)))
+            end
+            # PIV stats
+            ((x_avs, y_avs),
+            (u_avs, v_avs), 
+            (u_stds, v_stds), 
+             npts) = statistics_of_piv_pairs(raw_piv_results)
+    
+        elseif N > 2
+            image_groups = crop_and_group_images(images, crop_factor, N)
+            Threads.@threads for group in image_groups
+                for i in (1:length(group)-1)
+                    push!(raw_piv_results, JuliaPIV.main((group[i], group[i+1]), Int32(final_win_size), Float32(ol)))
+                end
+            end
+            # PIV stats
+            ((x_avs, y_avs), 
+            (u_avs, v_avs), 
+            (u_stds, v_stds), 
+            npts) = statistics_of_piv_groups(raw_piv_results, N)
 
-        # Thread PIV processing
-        Threads.@threads for pair in cropped_pairs
-            push!(raw_piv_results, JuliaPIV.main(pair, Int32(final_win_size), Float32(ol)))
+        else
+            error("N should be greater than 1")
         end
-
-        # Run stats
-        ((x_avs, y_avs), (u_avs, v_avs), (u_stds, v_stds), npts) = statistics_of_piv(raw_piv_results, N)
 
         image_names = parse_image_names(images, N)
         @assert length(image_names) == length(x_avs) "$length(image_names) != $length(x_avs)"
@@ -192,7 +306,7 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
             "pass_sizes" => raw_piv_results[i][3],
             "overlap" => ol,
             "method" => "multin",
-            "fn" => images,
+            "fn" => image_names,
             "u" => u_avs[i],
             "v" => v_avs[i],
             "npts" => npts[i],
@@ -218,8 +332,8 @@ function parse_six_args()
 
         final_win_size = parse(Int32, ARGS[3])
         ol = parse(Float32, ARGS[4])
-        out_dir = "tests/pipeline_utility_testing/SVSout_23227179_1724441851/pivframes/"
-        in_path = "tests/pipeline_utility_testing/testbatches/tmp.cp0atEmCuS.txt"
+        out_dir = ARGS[5]
+        in_path = ARGS[6]
         return N, crop_factors, final_win_size, ol, out_dir, in_path
 end
 
