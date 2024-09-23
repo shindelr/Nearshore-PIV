@@ -8,8 +8,12 @@ crop_factor="24, 2424, 1, 2048"
 final_win_size=16
 ol=0.5
 out_dir="tests/pipeline_utility_testing/SVSout_23227179_1724441851/pivframes/"
-# in_path="tests/pipeline_utility_testing/testbatches/"
+
+# SINGLE BATCH
 in_path="tests/pipeline_utility_testing/testbatches/tmp.7EOJPExxgd.txt"
+
+# MULTI BATCH
+# in_path="tests/pipeline_utility_testing/testbatches/"
 # multi_batch=1
 
 # Path to julia script
