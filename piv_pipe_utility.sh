@@ -3,7 +3,7 @@
 export JULIA_NUM_THREADS=4
 
 # Arguments
-N=3
+N=2
 crop_factor="24, 2424, 1, 2048"
 final_win_size=16
 ol=0.5

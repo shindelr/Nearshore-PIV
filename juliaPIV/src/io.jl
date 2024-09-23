@@ -290,7 +290,7 @@ function nan_std(arr::Vector{Matrix{Float32}})::Matrix{Float32}
 end
 
 """
-    parse_image_names(images::Vector{String}, N::Int32)::Vector{String}
+    parse_image_names(images::Vector{String}, N::Int32)::Vector{Vector{String}}
 
     Arguments:
         - `arg1::Type`: Description of the first argument.
@@ -300,14 +300,15 @@ end
     Returns:
         - `ReturnType`: Description of the return value.
 """
-function parse_image_names(images::Vector{String}, N::Int32)::Vector{String}
-    i = 1
-    image_names = Vector{String}()
-    while i < length(images)
-        push!(image_names, images[i][69:end-4])
-        i += N
+function parse_image_names(images::Vector{String}, N::Int32)::Vector{Vector{String}}
+    @show N
+    image_names = [image[69:end-4] for image in images]
+    image_groups = Vector{Vector{String}}()
+    for group in Iterators.partition(image_names, N)
+        push!(image_groups, group)
     end
-    return image_names
+    display(image_groups)
+    return image_groups
 end
 
 # SINGLE BATCH
@@ -349,7 +350,10 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
         ((x_avs, y_avs),
         (u_avs, v_avs), 
         (u_stds, v_stds), 
-         npts) = statistics_of_piv_pairs(raw_piv_results)
+        npts) = statistics_of_piv_pairs(raw_piv_results)
+
+        # Explicitly getting subgroup size for image parsing in this branch
+        subgroup_size = N
 
     elseif N > 2
         image_groups = crop_and_group_images(images, crop_factor, N)
@@ -371,8 +375,9 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
         error("N should be greater than 1")
     end
 
-    image_names = parse_image_names(images, N)
-    @assert length(image_names) == length(x_avs) "$(length(image_names)) != $(length(x_avs))"
+    # Format pass_sizes and group image names for .mat file
+    image_groups_names = parse_image_names(images, N)
+    @assert length(image_groups_names) == length(x_avs) "$(length(image_groups_names)) != $(length(x_avs))"
     pass_sizes = [raw_piv_results[1][3] raw_piv_results[1][3]]
 
     println("Building $(length(x_avs)) .mat files from 1 batch...")
@@ -383,14 +388,14 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
             "pass_sizes" => pass_sizes,
             "overlap" => ol,
             "method" => "multin",
-            "fn" => image_names,  
+            "fn" => image_groups_names[i],  
             "u" => u_avs[i],
             "v" => v_avs[i],
             "npts" => npts[i],
             "uStd" => u_stds[i],
             "vStd" => v_stds[i]
         )
-        MAT.matwrite("$out_dir$(image_names[i]).mat", mat_dict)
+        MAT.matwrite("$out_dir$(image_groups_names[i][1]).mat", mat_dict)
     end
 end
 
@@ -472,7 +477,7 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
             "pass_sizes" => raw_piv_results[i][3],
             "overlap" => ol,
             "method" => "multin",
-            "fn" => image_names,
+            "fn" => image_names[i],
             "u" => u_avs[i],
             "v" => v_avs[i],
             "npts" => npts[i],
