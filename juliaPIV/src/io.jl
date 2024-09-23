@@ -301,13 +301,11 @@ end
         - `ReturnType`: Description of the return value.
 """
 function parse_image_names(images::Vector{String}, N::Int32)::Vector{Vector{String}}
-    @show N
     image_names = [image[69:end-4] for image in images]
     image_groups = Vector{Vector{String}}()
     for group in Iterators.partition(image_names, N)
         push!(image_groups, group)
     end
-    display(image_groups)
     return image_groups
 end
 
@@ -352,9 +350,6 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
         (u_stds, v_stds), 
         npts) = statistics_of_piv_pairs(raw_piv_results)
 
-        # Explicitly getting subgroup size for image parsing in this branch
-        subgroup_size = N
-
     elseif N > 2
         image_groups = crop_and_group_images(images, crop_factor, N)
         Threads.@threads for group in image_groups
@@ -363,7 +358,7 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
             end
         end
 
-        # Explicitly getting subgroup size for clarity
+        # Explicitly setting subgroup size for clarity
         subgroup_size = Int32(length(image_groups))
         # PIV stats
         ((x_avs, y_avs), 
@@ -453,7 +448,7 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
                     push!(raw_piv_results, JuliaPIV.main((group[i], group[i+1]), Int32(final_win_size), Float32(ol)))
                 end
             end
-            # Explicitly getting subgroup size for clarity
+            # Explicitly setting subgroup size for clarity
             subgroup_size = Int32(length(image_groups))
             # PIV stats
             ((x_avs, y_avs), 
@@ -465,8 +460,10 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
             error("N should be greater than 1")
         end
 
+        # Format pass_sizes and group image names for .mat file
         image_names = parse_image_names(images, N)
-        @assert length(image_names) == length(x_avs) "$length(image_names) != $length(x_avs)"
+        @assert length(image_names) == length(x_avs) "$(length(image_names)) != $(length(x_avs))"
+        pass_sizes = [raw_piv_results[1][3] raw_piv_results[1][3]]
 
         println("Building $(length(x_avs)) .mat files...")
         # Write to .mat file at argued out_dir
@@ -474,7 +471,7 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
             mat_dict = Dict(
             "x" => x_avs[i],
             "y" => y_avs[i],
-            "pass_sizes" => raw_piv_results[i][3],
+            "pass_sizes" => pass_sizes,
             "overlap" => ol,
             "method" => "multin",
             "fn" => image_names[i],
@@ -502,7 +499,7 @@ end
     Returns:
         - `ReturnType`: Description of the return value.
 """
-function parse_six_args()
+function parse_seven_args()
         N = parse(Int32, ARGS[1])
 
         # Parse and split up crop factors
@@ -516,7 +513,8 @@ function parse_six_args()
         ol = parse(Float32, ARGS[4])
         out_dir = ARGS[5]
         in_path = ARGS[6]
-        return N, crop_factors, final_win_size, ol, out_dir, in_path
+        verbose = parse(Int32, ARGS[7])
+        return N, crop_factors, final_win_size, ol, out_dir, in_path, verbose
 end
 
 """
@@ -530,10 +528,10 @@ end
     Returns:
         - `ReturnType`: Description of the return value.
 """
-function parse_seven_args()
-    N, crop_factors, final_win_size, ol, out_dir = parse_six_args()
-    multi_batch = parse(Int32, ARGS[7])
-    return N, crop_factors, final_win_size, ol, out_dir, ARGS[6], multi_batch
+function parse_eight_args()
+    N, crop_factors, final_win_size, ol, out_dir, verbose = parse_seven_args()
+    multi_batch = parse(Int32, ARGS[8])
+    return N, crop_factors, final_win_size, ol, out_dir, ARGS[6], verbose, multi_batch
 end
 
 """
@@ -549,8 +547,12 @@ end
 """
 function julia_main()::Cint
     # Check on ARGS
-    if length(ARGS) == 6
-        N, crop_factors, final_win_size, ol, out_dir, in_path = parse_six_args()
+    if length(ARGS) == 7
+        N, crop_factors, final_win_size, ol, out_dir, in_path, verbose = parse_seven_args()
+        if verbose == 0
+            og_stdout = stdout
+            redirect_stdout(devnull)
+        end
         # Run PIV pipeline
         try 
             io_main(N, crop_factors, final_win_size, ol, out_dir, in_path)
@@ -558,9 +560,13 @@ function julia_main()::Cint
             error(e)
             return 1
         end
-    elseif length(ARGS) == 7
-        N, crop_factors, final_win_size, ol, out_dir, in_dir, multi_batch = parse_seven_args()
+    elseif length(ARGS) == 8
+        N, crop_factors, final_win_size, ol, out_dir, in_dir, verbose, multi_batch = parse_eight_args()
         # Run PIV pipeline
+        if verbose == 0
+            og_stdout = stdout
+            redirect_stdout(devnull)
+        end
         try 
             io_main(N, crop_factors, final_win_size, ol, out_dir, in_dir, multi_batch)
         catch e
@@ -570,6 +576,9 @@ function julia_main()::Cint
     else
         error("\nIncorrect number of arguments! Should be:\n-N\n-crop_factors\n-final_win_size\n-ol\n-out_dir\n-in_dir\n")
         return 1
+    end
+    if verbose == 0
+        redirect_stdout(og_stdout)
     end
     return 0
 end
