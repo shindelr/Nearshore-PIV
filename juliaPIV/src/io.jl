@@ -4,31 +4,29 @@ export julia_main
 using Base.Threads
 using FileIO
 using Images
-using Plots           # Can be removed
 using Statistics
 using MAT
-using DelimitedFiles  # Can be removed
 include("main.jl")
 using .JuliaPIV
 
 """
-    get_raw_images(PATH::String)::Vector{String}
+    get_raw_images(path::String)::Vector{String}
 
-    Briefly describe what the function does.
+    Read in a list of image names from a given text file. Note that if 
+    the text file is not in the same directory as the images, the path to 
+    the images must be prepended to the image names.   
 
     Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
+        - `path::String`: Relative path to the text file containing image names.
 
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Vector{String}`: Vector of image names.
 """
-function get_raw_images(PATH::String)::Vector{String}
-    files::Vector{String} = readlines(PATH)
-    prefix_dir = "tests/pipeline_utility_testing/"
+function get_raw_images(path::String)::Vector{String}
+    files::Vector{String} = readlines(path)
+    prefix_dir = dirname(dirname(path))
     # Get raw images and prepend the test directory
-    return ["$prefix_dir$file" for file in files]
+    return ["$prefix_dir/$file" for file in files]
 end
 
 """
@@ -36,31 +34,38 @@ end
                         crop_factor::NTuple{4, Int32}
                         )::Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}
 
-    Briefly describe what the function does.
+    Create pairs of images from a given list of images. While pairing,
+    the images are cropped and converted to Gray scale type.
 
     Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
-
+        - `images::Vector{String}`: Vector of image names.
+        - `crop_factor::NTuple{4, Int32}`: Tuple of 4 integers representing the 
+            cropping factor (left, right, top, bottom).
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}`: A vector of
+            tuples containing the processed images.
 """
-function crop_and_pair_images(images::Vector{String}, crop_factor::NTuple{4, Int32})::Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}
+function crop_and_pair_images(images::Vector{String}, 
+                            crop_factor::NTuple{4, Int32}
+                            )::Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}
+    # Preallocate image pair types
     image_pairs = Dict{Int32, Tuple{String, String, Matrix{Gray{N0f8}}, Matrix{Gray{N0f8}}}}()
     i = 1
     count = 1
     while i < length(images)
+        # Load images and crop
         img1 = load(images[i])
         img2= load(images[i+1])
         img1 = img1[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
         img2 = img2[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
+        # Load filename and Gray images into dictionary using count as a key
         image_pairs[count] = (images[i], images[i+1], Gray.(img1), Gray.(img2))
         i += 2
         count += 1
     end
 
     @assert length(image_pairs) == length(images) ÷ 2 "Length of image pairs should be half the length of images"
+    # Return a vector of tuples containing the Gray images
     return [(image_pairs[i][3], image_pairs[i][4]) for i in eachindex(image_pairs)]
 end
 
@@ -69,18 +74,24 @@ end
                         crop_factor::NTuple{4, Int32}, N::Int32
                         )::Vector{Vector{Matrix{Gray{N0f8}}}}
 
-    Briefly describe what the function does.
+    Create non-pair groups of images from a given list of images. While 
+    grouping, the images are cropped and converted to Gray scale type.
+    This function is important for processing groups larger than 2.
 
     Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
-
+        - `images::Vector{String}`: Vector of image names.
+        - `crop_factor::NTuple{4, Int32}`: Tuple of 4 integers representing the 
+            cropping factor (left, right, top, bottom).
+        - `N::Int32`: Number of images in each group.
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Vector{Vector{Matrix{GrayN0f8}}}}}`: A vector of
+            vectors containing groups of the processed images.
 """
-function crop_and_group_images(images::Vector{String}, crop_factor::NTuple{4, Int32}, N::Int32)
-    # image_groups = Dict{Int32, Vector{Matrix}}()
+function crop_and_group_images(images::Vector{String}, 
+                                crop_factor::NTuple{4, Int32},
+                                N::Int32
+                                )::Vector{Vector{Matrix{Gray{N0f8}}}}
+
     image_groups = Vector{Vector{Matrix{Gray{N0f8}}}}()
     i = 1
     count = 1
@@ -92,10 +103,11 @@ function crop_and_group_images(images::Vector{String}, crop_factor::NTuple{4, In
             img_name = images[i + j - 1]
             img = load(img_name)
             img = img[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
+            # Push images into their respective group
             push!(group, Gray.(img)) 
             j += 1
         end
-        # image_groups[count] = group
+        # Push groups into the final return vector
         push!(image_groups, group)
         i += N
         count += 1
@@ -107,29 +119,32 @@ end
 """
     statistics_of_piv_pairs(piv_results)
 
-    Briefly describe what the function does.
+    Compute the statistics of PIV results for pairs of images. Knowing
+    that the results are in pairs allows for a slightly more efficient
+    allocation of matrices into groups of 2 for averaging and standard
+    deviation calculations.
 
     Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
-
+        - `piv_results`: An array containing each of the piv results 
+            coming back from the main PIV algorithm.
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Tuple{Tuple{}, Tuple{}, Tuple{}, Matrix{Int32}}`: A tuple of 
+            tuples containing the averages, standard deviations, and a 
+            sum of points that were NaN prior to averaging for each 
+            pair of images.
 """
 function statistics_of_piv_pairs(piv_results)
     println("Calculating statistics...")
     # Preallocations
-    u_avs = Vector{Matrix{Float32}}()
-    u_stds = Vector{Matrix{Float32}}()
-    v_avs = Vector{Matrix{Float32}}()
-    v_stds = Vector{Matrix{Float32}}()
-    x_avs = Vector{Matrix{Float32}}()
-    y_avs = Vector{Matrix{Float32}}()
+    u_avs = Vector{Matrix{Float32}}(); u_stds = Vector{Matrix{Float32}}()
+    v_avs = Vector{Matrix{Float32}}(); v_stds = Vector{Matrix{Float32}}()
+    x_avs = Vector{Matrix{Float32}}(); y_avs = Vector{Matrix{Float32}}()
     npts = Vector{Matrix{Int32}}()
 
     # Unpack results
-    xs, ys, us, vs = [], [], [], []
+    xs = Vector{Matrix{Float32}}(); ys = Vector{Matrix{Float32}}()
+    us = Vector{Matrix{Float32}}(); vs = Vector{Matrix{Float32}}()
+
     for result in piv_results
         push!(xs, result[1][1])
         push!(ys, result[1][2])
@@ -150,13 +165,13 @@ function statistics_of_piv_pairs(piv_results)
         nan_binary_masks = Vector{Matrix{Bool}}([isnan.(u) for u in un_group])
         push!(npts, sum(nan_binary_masks))
 
-        # Compute averages and stds, no need to worry about NaNs for pairs
-        push!(u_avs, mean(un_group))
+        # Compute averages and stds
         push!(u_stds, std(un_group))
-        push!(v_avs, mean(vn_group))
         push!(v_stds, std(vn_group))
-        push!(x_avs, mean(xn_group))
-        push!(y_avs, mean(yn_group))
+        push!(u_avs, nan_mean(un_group))
+        push!(v_avs, nan_mean(vn_group))
+        push!(x_avs, nan_mean(xn_group))
+        push!(y_avs, nan_mean(yn_group))
 
         i += 1
     end
@@ -167,25 +182,26 @@ end
 """
     statistics_of_piv_groups(piv_results, N::Int32)
 
-    Briefly describe what the function does.
+    Compute the statistics of PIV results for variable groups of
+    images. After partitioning the results of the PIV algorithm into
+    subgroups, each group's data is averaged and the standard deviation
+    calculated.
 
     Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
-
+        - `piv_results`: An array containing each of the piv results 
+            coming back from the main PIV algorithm.
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Tuple{Tuple{}, Tuple{}, Tuple{}, Matrix{Int32}}`: A tuple of 
+            tuples containing the averages, standard deviations, and a 
+            sum of points that were NaN prior to averaging for each 
+            pair of images.
 """
 function statistics_of_piv_groups(piv_results, N::Int32)
     println("Calculating statistics...")
     # Preallocations
-    u_avs = Vector{Matrix{Float32}}()
-    u_stds = Vector{Matrix{Float32}}()
-    v_avs = Vector{Matrix{Float32}}()
-    v_stds = Vector{Matrix{Float32}}()
-    x_avs = Vector{Matrix{Float32}}()
-    y_avs = Vector{Matrix{Float32}}()
+    u_avs = Vector{Matrix{Float32}}(); u_stds = Vector{Matrix{Float32}}()
+    v_avs = Vector{Matrix{Float32}}(); v_stds = Vector{Matrix{Float32}}()
+    x_avs = Vector{Matrix{Float32}}(); y_avs = Vector{Matrix{Float32}}()
     npts = Vector{Matrix{Int32}}()
 
     # Unpack results
@@ -209,7 +225,7 @@ function statistics_of_piv_groups(piv_results, N::Int32)
         nan_binary_masks = Vector{Matrix{Bool}}([isnan.(u) for u in un_group])
         push!(npts, sum(nan_binary_masks))
 
-        # Compute averages and stds
+        # Compute averages and stds paying attention to NaNs.
         push!(u_avs, nan_mean(un_group))
         push!(u_stds, nan_std(un_group))
         push!(v_avs, nan_mean(vn_group))
@@ -224,13 +240,14 @@ end
 """
     nan_mean(arr::Vector{Matrix{Float32}})::Matrix{Float32}
 
-    Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
+    Compute the mean of a vector of matrices, ignoring NaN values. 
 
+    Arguments:
+        - `arr::Vector{Matrix{Float32}}`: Vector of matrices containing 
+            the data to be averaged. May contain NaN values.
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Matrix{Float32}`: A single matrix containing the mean of all the 
+            input matrices disregarding NaN values.
 """
 function nan_mean(arr::Vector{Matrix{Float32}})::Matrix{Float32}
     # Preallocate
@@ -258,13 +275,17 @@ end
 """
     nan_std(arr::Vector{Matrix{Float32}})::Matrix{Float32}
 
-    Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
+    Compute the standard deviation of a vector of matrices, ignoring 
+    NaN values. NOTE: If there is only one value in the vector, the
+    standard deviation is undefined and set to NaN. If all values in
+    the matrix return NaN, the function will halt and throw an error.
 
+    Arguments:
+        - `arr::Vector{Matrix{Float32}}`: Vector of matrices containing 
+            the data to be averaged. May contain NaN values.
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Matrix{Float32}`: A single matrix containing the std of all the 
+            input matrices disregarding NaN values.
 """
 function nan_std(arr::Vector{Matrix{Float32}})::Matrix{Float32}
     std_matrix = Matrix{Float32}(undef, size(arr[1]))
@@ -292,16 +313,18 @@ end
 """
     parse_image_names(images::Vector{String}, N::Int32)::Vector{Vector{String}}
 
-    Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
+    Parse a vector of image names into groups of N image names. 
 
+    Arguments:
+        - `images::Vector{String}`: Vector of image names to be 
+            parsed into groups
+        - `N::Int32`: Number of images expected to be in each group.
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Vector{Vector{String}}`: A vector of groups of image names.
 """
 function parse_image_names(images::Vector{String}, N::Int32)::Vector{Vector{String}}
-    image_names = [image[69:end-4] for image in images]
+    # Take just the name of the image itself and not full filepath
+    image_names = [basename(image) for image in images]
     image_groups = Vector{Vector{String}}()
     for group in Iterators.partition(image_names, N)
         push!(image_groups, group)
@@ -314,13 +337,20 @@ end
     io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
     ol::Float32, out_dir::String, in_path::String) where {T}
 
+    Run a single batch of images through the Julia PIV algorithm.
+
     Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
+        - `N::Int32`: Number of images in each subgroup to run PIV on.
+            Corresponds to the LiDAR scan rate.
+        - `crop_factor::Int32`: Tuple of 4 integers representing the 
+            cropping factor (left, right, top, bottom).
+        - `final_win_size::Int32`: Final window size for PIV.
+        - `ol::Float32`: Overlap percentage for PIV.
+        - `out_dir::String`: Directory to write .mat files to.
+        - `in_path::String`: Path to the directory containing the images.
 
     Returns:
-        - `ReturnType`: Description of the return value.
+        None
 """
 function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
     ol::Float32, out_dir::String, in_path::String) where {T}
@@ -399,13 +429,22 @@ end
     io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
     ol::Float32, out_dir::String, in_dir::String, multi_batch::Int32) where {T}
 
-    Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
+    Automatically run multiple batches of images through the Julia 
+    PIV algorithm.    
 
+    Arguments:
+        - `N::Int32`: Number of images in each subgroup to run PIV on.
+            Corresponds to the LiDAR scan rate.
+        - `crop_factor::Int32`: Tuple of 4 integers representing the 
+            cropping factor (left, right, top, bottom).
+        - `final_win_size::Int32`: Final window size for PIV.
+        - `ol::Float32`: Overlap percentage for PIV.
+        - `out_dir::String`: Directory to write .mat files to.
+        - `in_dir::String`: Path to the directory containing the batches.
+        - `multi_batch::Int32`: Flag to indicate multiple batches. Pass 1 
+            for multiple batches, 0 for single batch.
     Returns:
-        - `ReturnType`: Description of the return value.
+        None
 """
 function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
     ol::Float32, out_dir::String, in_dir::String, multi_batch::Int32) where {T}
@@ -489,15 +528,13 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
 end
 
 """
-    parse_six_args()
+    parse_seven_args()
 
-    Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
+    Parse arguments from command line.
 
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Tuple{Int32, NTuple{4, Int32}, Int32, 
+                Float32, String, String, Int32}`: ARGS to run JuliaPIV.
 """
 function parse_seven_args()
         N = parse(Int32, ARGS[1])
@@ -518,32 +555,50 @@ function parse_seven_args()
 end
 
 """
-    parse_seven_args()
+    parse_eight_args()
 
-    Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
+    Parse arguments from command line.
 
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Tuple{Int32, NTuple{4, Int32}, Int32, 
+                Float32, String, String, Int32, Int32}`: ARGS to run JuliaPIV.
 """
 function parse_eight_args()
-    N, crop_factors, final_win_size, ol, out_dir, verbose = parse_seven_args()
+    N, crop_factors, final_win_size, ol, out_dir, in_path, verbose = parse_seven_args()
     multi_batch = parse(Int32, ARGS[8])
-    return N, crop_factors, final_win_size, ol, out_dir, ARGS[6], verbose, multi_batch
+    in_dir = in_path
+    return N, crop_factors, final_win_size, ol, out_dir, in_dir, verbose, multi_batch
 end
 
 """
     julia_main()::Cint
 
-    Arguments:
-        - `arg1::Type`: Description of the first argument.
-        - `arg2::Type`: Description of the second argument.
-        - `args...`: Description of additional arguments.
+    Main entry point to run the PIV pipeline utility. Two optional flags
+    can be passed in from the command line. `verbose` will suppress all
+    stdout if set to 0. `multi_batch` will run multiple batches of images
+    through the PIV algorithm if set to 1. Please note, that when running
+    multiple batches, the `in_path` argument should be the directory
+    containing the batches, not the batch itself.
+
+    .mat files will be written
+    to the argued `out_dir` directory path. These .mat files will contain
+    a variety of information detailed here:
+        x: [255×299 double]
+        y: [255×299 double]
+        pass_sizes: [3×2 double]
+        overlap: 0.5
+            method: 'multin'
+            fn: {list of jpg files}
+                u: [255×299 double]
+                v: [255×299 double]
+            npts: [255×299 double]  # number of data points that weren't NaN 
+                                    # prior to time-average
+            uStd: [255×299 double]  # standard deviation of the N results
+            vStd: [255×299 double]  # ditto
 
     Returns:
-        - `ReturnType`: Description of the return value.
+        - `Cint`: 0 if successful, 1 if unsuccessful.
+
 """
 function julia_main()::Cint
     # Check on ARGS

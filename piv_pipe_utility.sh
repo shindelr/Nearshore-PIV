@@ -13,14 +13,14 @@ out_dir="tests/pipeline_utility_testing/SVSout_23227179_1724441851/pivframes/"
 in_path="tests/pipeline_utility_testing/testbatches/tmp.7EOJPExxgd.txt"
 
 # MULTI BATCH
-# in_path="tests/pipeline_utility_testing/testbatches/"
+# in_dir="tests/pipeline_utility_testing/testbatches/"
 # multi_batch=1
 
-verbose=0
+verbose=1
 
 # Path to julia script
 exec_path="/Users/robinshindelman/repos/Nearshore-Research/juliaPIV/src/io.jl"
 
 # Run julia script
-# julia $exec_path $N $crop_factor $final_win_size $ol $out_dir $in_path $verbose $multi_batch
+# julia $exec_path $N $crop_factor $final_win_size $ol $out_dir $in_dir $verbose $multi_batch
 julia $exec_path $N $crop_factor $final_win_size $ol $out_dir $in_path $verbose
