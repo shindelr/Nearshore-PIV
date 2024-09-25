@@ -277,7 +277,7 @@ end
 
     Compute the standard deviation of a vector of matrices, ignoring 
     NaN values. NOTE: If there is only one value in the vector, the
-    standard deviation is undefined and set to NaN. If all values in
+    standard deviation is undefined and set to 0.0. If all values in
     the matrix return NaN, the function will halt and throw an error.
 
     Arguments:
@@ -300,8 +300,8 @@ function nan_std(arr::Vector{Matrix{Float32}})::Matrix{Float32}
             end
             if length(temp_stds) > 1
                 std_val = std(temp_stds)
-            # elseif length(temp_stds) == 1
-            #     std_val = 0.0  # If only one value, std = 0 bc no variance for one value
+            elseif length(temp_stds) == 1
+                std_val = 0.0  # If only one value, std = 0 bc no variance for one value
             end
             std_matrix[i, j] = std_val
         end
