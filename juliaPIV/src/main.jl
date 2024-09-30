@@ -1191,14 +1191,16 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
 end
 end
 
-# # TESTING
+# TESTING
 # im1 = load("tests/pipeline_utility_testing/SVSout_23227179_1724441851/jpgframes/000098_1724441890717715432.jpg")
 # im2 = load("tests/pipeline_utility_testing/SVSout_23227179_1724441851/jpgframes/000099_1724441890730217304.jpg")
-# crops = (24, 2424, 1, 2048)
-# im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
-# im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
-# im_pair = (Gray.(im1), Gray.(im2))
+im1 = load("../data/im1.jpg")
+im1 = load("../data/im2.jpg")
+crops = (24, 2424, 1, 2048)
+im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
+im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
+im_pair = (Gray.(im1), Gray.(im2))
 # writedlm("tests/pipeline_utility_testing/csv_output/98_main.csv", im_pair[1], ',')
 # writedlm("tests/pipeline_utility_testing/csv_output/99_main.csv", im_pair[2], ',')
 
-# JuliaPIV.main(im_pair, Int32(16), Float32(0.5))
+JuliaPIV.main(im_pair, Int32(16), Float32(0.5))
