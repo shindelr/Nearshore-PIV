@@ -1,6 +1,6 @@
 
-module JuliaPIV
-export main
+# module JuliaPIV
+# export main
 # Third party modules
 using Statistics
 using FFTW            # Fast Fourier Transforms library built on C
@@ -1174,7 +1174,7 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
 
     return ((x, y), (u, v), pass_sizes)
 
-    # # Plotting stuff
+    # Plotting stuff
     # u_map = heatmap(u, 
     #                 title = "u [pixels/frame]", 
     #                 aspect_ratio = :equal, 
@@ -1186,21 +1186,23 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     #                 aspect_ratio = :equal, 
     #                 ylimits=(0, 200), 
     #                 xlimits=(0, 385))
-    # display(plot(u_map, v_map, layout = (2, 1)))
+    # dbl_plot = plot(u_map, v_map, layout = (2, 1))
+    # png(dbl_plot, "../../tests/gpu_tests/output.png")
 
 end
-end
+# end
 
 # TESTING
-# im1 = load("tests/pipeline_utility_testing/SVSout_23227179_1724441851/jpgframes/000098_1724441890717715432.jpg")
-# im2 = load("tests/pipeline_utility_testing/SVSout_23227179_1724441851/jpgframes/000099_1724441890730217304.jpg")
-im1 = load("../data/im1.jpg")
-im1 = load("../data/im2.jpg")
-crops = (24, 2424, 1, 2048)
-im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
-im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
-im_pair = (Gray.(im1), Gray.(im2))
-# writedlm("tests/pipeline_utility_testing/csv_output/98_main.csv", im_pair[1], ',')
-# writedlm("tests/pipeline_utility_testing/csv_output/99_main.csv", im_pair[2], ',')
 
-JuliaPIV.main(im_pair, Int32(16), Float32(0.5))
+function timed_main()
+    im1 = load("../data/im1.jpg")
+    im2 = load("../data/im2.jpg")
+    crops = (24, 2424, 1, 2048)
+    im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
+    im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
+    im_pair = (Gray.(im1), Gray.(im2))
+
+    main(im_pair, Int32(16), Float32(0.5))
+end
+
+# @time timed_main()
