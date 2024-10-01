@@ -10,6 +10,7 @@ using DelimitedFiles  # Write matrices to CSV
 using Interpolations
 using Plots
 using Luxor            # For creating inpolygon() functionality
+using CUDA
 
 # PASS FUNCTIONS 
 """
@@ -1150,7 +1151,6 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     end
 
     pass_sizes::Vector{Int32} = 2 .^ collect(Int32, 6:-1:log2pivwin)
-    # push!(pass_sizes, pass_sizes[end]) # Duplicate final element
     push!(pass_sizes, final_win_size) # Duplicate final element
 
     # other input params for piv
@@ -1159,16 +1159,29 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     validvec::Int32 = 3
     x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
+    # writedlm("../../tests/gpu_tests/u.csv", u, ',')
+    # writedlm("../../tests/gpu_tests/v.csv", v, ',')
+    # writedlm("../../tests/gpu_tests/SnR.csv", SnR, ',')
+    # writedlm("../../tests/gpu_tests/Pkh.csv", Pkh, ',')
+
+    u_gpu = cu(u)
+    v_gpu = cu(v)
+    SnR_gpu = cu(SnR)
+    Pkh_gpu = cu(Pkh)
+
     # Reject data with too-low signal-to-noise level
     snrthresh::Float32 = 1.3
-    u .= ifelse.(SnR .< snrthresh, NaN, u)
-    v .= ifelse.(SnR .< snrthresh, NaN, v)
+    u_gpu .= ifelse.(SnR_gpu .< snrthresh, NaN, u_gpu)
+    v_gpu .= ifelse.(SnR_gpu .< snrthresh, NaN, v_gpu)
 
     # Reject data with too-low correlation peak height
     pkhthresh::Float32 = 0.3
-    u .= ifelse.(Pkh .< pkhthresh, NaN, u)
-    v .= ifelse.(Pkh .< pkhthresh, NaN, v)
+    u_gpu .= ifelse.(Pkh_gpu .< pkhthresh, NaN, u_gpu)
+    v_gpu .= ifelse.(Pkh_gpu .< pkhthresh, NaN, v_gpu)
 
+    copyto!(u, u_gpu)
+    copyto!(v, v_gpu)
+    
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
 
@@ -1204,5 +1217,3 @@ function timed_main()
 
     main(im_pair, Int32(16), Float32(0.5))
 end
-
-# @time timed_main()
