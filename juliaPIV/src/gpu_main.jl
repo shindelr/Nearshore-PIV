@@ -50,6 +50,14 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
         println("Pass ", i, " of ", total_passes)
 
         x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
+
+        # if i == 1
+        #     writedlm("../../tests/gpu_tests/datax.csv", datax, ',')
+        #     writedlm("../../tests/gpu_tests/datay.csv", datay, ',')
+        #     writedlm("../../tests/gpu_tests/x.csv", x, ',')
+        #     writedlm("../../tests/gpu_tests/y.csv", y, ',')
+        # end
+
         datax, datay = localfilt(x, y, datax, datay, sensit)
 
         datax, datay = linear_naninterp(datax, datay)

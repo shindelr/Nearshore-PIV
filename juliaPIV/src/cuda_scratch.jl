@@ -3,7 +3,6 @@ using DelimitedFiles
 
 function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32}, 
     v::Matrix{Float32}, threshold::Int32, median_bool=true, m=3)
-    IN = CUDA.zeros(Float32, size(u))
 
     dim1 = round(Int32, size(u, 1) + 2 * floor(m / 2))
     dim2 = round(Int32, size(u, 2) + 2 * floor(m / 2))
@@ -20,7 +19,6 @@ function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32},
     nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
 
     INx = CUDA.zeros(Float32, size(nu))
-    INx[from_cols:end-minus_rows, from_cols:end-minus_rows] = IN
 
     U2::CuArray{ComplexF32} = nu .+ im .* nv
 
@@ -35,29 +33,23 @@ function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32},
     m_ceil_two = ceil(Int32, m / 2)
 
     # Run the kernel
-    @cuda threads=16 blocks=(ceil(Int32, na/16), ceil(Int32, ma/16)) filt_loop_kernel!(i_bound, j_bound, m_floor_two, m_ceil_two, INx, U2, histo, histostd) 
+    # @cuda filt_loop_kernel!(i_bound, j_bound, m_floor_two, m_ceil_two, INx, U2, histo, histostd) 
 
-    # for ii in m-1:1:na-m+2
-    #     for jj in m-1:1:ma-m+2
+    for ii in m-1:1:na-m+2
+        for jj in m-1:1:ma-m+2
+            # Get 3x3 submatrix
+            m_floor_two = floor(Int32, m / 2)
+            tmp::CuArray{ComplexF32} = U2[jj-m_floor_two:jj+m_floor_two,
+                                            ii-m_floor_two:ii+m_floor_two]
 
-    #         if INx[jj, ii] != 1
-    #             m_floor_two = floor(Int32, m / 2)
-    #             tmp::CuArray{ComplexF32} = U2[jj-m_floor_two:jj+m_floor_two,
-    #                                           ii-m_floor_two:ii+m_floor_two]
-    #             tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
+            # Set center to NaN for some reason
+            tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
 
-    #             # Run the appropriate stat depending on method arg.
-    #             usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
-    #             histostd[jj, ii] = im_std(tmp[:])
-
-    #         else
-    #             usum = NaN
-    #             tmp = NaN
-    #             histostd[jj, ii] = NaN
-    #         end
-    #         histo[jj, ii] = usum
-    #     end
-    # end
+            # Run the appropriate stat depending on method arg.
+            histo[jj, ii] = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
+            histostd[jj, ii] = im_std(tmp[:])
+        end
+    end
 
     # Locate gridpoints w/higher value than the threshold
     coords = findall(
@@ -84,36 +76,19 @@ function filt_loop_kernel!(i_bound, j_bound, m_floor_two, m_ceil_two,
                             INx, U2, histo, histostd)
     # GPUs operate in blocks with many threads in each block.
     # To take advantage of this, we can parallelize the double for loop
-    # in the original CPU code. To do this, we need to calculate the
-    # thread index and block index for each thread and assign the size
-    # of the blocks. Since the CPU operates over a 2D grid, we'll use two
-    # dimensions for the blocks and threads.
+    # in the original CPU code.
     i = threadIdx().x + (blockIdx().x - 1) * blockDim().x
     j = threadIdx().y + (blockIdx().y - 1) * blockDim().y
-
-    # tmp is an inefficient use of GPU memory. The solution is to load
-    # the data into shared memory so that each block can access it and
-    # take their particular share of the data.
-    # shared_tmp = @cuDynamicSharedMem(Float32, (blockDim().y, blockDim().x))
 
     # Each thread is operating in parallel, so just check that its given
     # indices are within the bound of the matrix.
     if i <= i_bound && j <= j_bound
-        # While this is scalar indexing, in this context it's not
-        # inefficient! The GPU does not need to ship this computation
-        # back to the CPU. This is because the whole matrix has been 
-        # divided into a grid of blocks and threads mapped to (i, j).
-        # So in a nutshell, this is a local operation to the GPU.
         if INx[j, 1] != 1
-            # shared_tmp[threadIdx().y, threadIdx().x] = U2[j - m_floor_two: j + m_floor_two,
-            #                                               i - m_floor_two: i + m_floor_two]
-            # # Syncronize threads to make sure all parts of shared_tmp are loaded
-            # synchronize()
             tmp = CUDA.zeros(Float32, (j+m_floor_two, i+m_floor_two)) * NaN
             tmp = U2[j - m_floor_two: j + m_floor_two,
                       i - m_floor_two: i + m_floor_two]
             tmp[m_ceil_two, m_ceil_two] = NaN
-
+            usum = 1
             # usum = im_median_magnitude(tmp[:])
             # histostd[j, i] = im_std(tmp[:])
         else
