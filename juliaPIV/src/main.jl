@@ -879,8 +879,7 @@ end
 """
 function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32}, 
                     v::Matrix{Float32}, threshold::Int32, median_bool=true, m=3)
-    IN = zeros(eltype(u), size(u))
-
+    # IN = zeros(eltype(u), size(u))  # Masking not implemented
     dim1 = round(Int32, size(u, 1) + 2 * floor(m / 2))
     dim2 = round(Int32, size(u, 2) + 2 * floor(m / 2))
     nu = zeros(eltype(u), (dim1, dim2)) * NaN
@@ -892,34 +891,41 @@ function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32},
     nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
     nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
 
-    INx = zeros(eltype(nu), size(nu))
-    INx[from_cols:end-minus_rows, from_cols:end-minus_rows] = IN
+    # INx = zeros(eltype(nu), size(nu))
+    # Masking not implemented
+    # INx[from_cols:end-minus_rows, from_cols:end-minus_rows] = IN
 
     U2::Matrix{ComplexF32} = nu .+ im .* nv
 
     ma, na = size(U2)
+    @show size(U2)
     histostd = zeros(ComplexF32, size(nu))
     histo = zeros(ComplexF32, size(nu))
 
     for ii in m-1:1:na-m+2
         for jj in m-1:1:ma-m+2
 
-            if INx[jj, ii] != 1
-                m_floor_two = floor(Int32, m / 2)
-                tmp = U2[jj-m_floor_two:jj+m_floor_two,
-                    ii-m_floor_two:ii+m_floor_two]
-                tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
+            # if INx[jj, ii] != 1
+            # Get a 3x3 submatrix of U2
+            m_floor_two = floor(Int32, m / 2)
+            tmp = U2[jj-m_floor_two:jj+m_floor_two,
+                        ii-m_floor_two:ii+m_floor_two]
 
-                # Run the appropriate stat depending on method arg.
-                usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
-                histostd[jj, ii] = im_std(tmp[:])
+            # Assign the center value to NaN
+            tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
 
-            else
-                usum = NaN
-                tmp = NaN
-                histostd[jj, ii] = NaN
-            end
-            histo[jj, ii] = usum
+            # Run the appropriate stat depending on method arg.
+            # usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
+            histo[jj, ii] = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
+            histostd[jj, ii] = im_std(tmp[:])
+
+            # else
+            #     println("made it")
+            #     usum = NaN
+            #     tmp = NaN
+            #     histostd[jj, ii] = NaN
+            # end
+            # histo[jj, ii] = usum
         end
     end
 
@@ -1175,18 +1181,18 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     # return ((x, y), (u, v), pass_sizes)
 
     # Plotting stuff
-    # u_map = heatmap(u, 
-    #                 title = "u [pixels/frame]", 
-    #                 aspect_ratio = :equal, 
-    #                 limits=(0, 200), 
-    #                 xlimits=(0, 385))
+    u_map = heatmap(u, 
+                    title = "u [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    limits=(0, 200), 
+                    xlimits=(0, 385))
 
-    # v_map = heatmap(v, 
-    #                 title = "v [pixels/frame]", 
-    #                 aspect_ratio = :equal, 
-    #                 ylimits=(0, 200), 
-    #                 xlimits=(0, 385))
-    # dbl_plot = plot(u_map, v_map, layout = (2, 1))
+    v_map = heatmap(v, 
+                    title = "v [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    ylimits=(0, 200), 
+                    xlimits=(0, 385))
+    plot(u_map, v_map, layout = (2, 1))
     # png(dbl_plot, "../../tests/gpu_tests/output.png")
 
 end
@@ -1205,4 +1211,4 @@ function timed_main()
     main(im_pair, Int32(16), Float32(0.5))
 end
 
-# @time timed_main()
+timed_main()
