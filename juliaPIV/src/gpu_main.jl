@@ -1164,24 +1164,16 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     # writedlm("../../tests/gpu_tests/SnR.csv", SnR, ',')
     # writedlm("../../tests/gpu_tests/Pkh.csv", Pkh, ',')
 
-    u_gpu = cu(u)
-    v_gpu = cu(v)
-    SnR_gpu = cu(SnR)
-    Pkh_gpu = cu(Pkh)
-
     # Reject data with too-low signal-to-noise level
     snrthresh::Float32 = 1.3
-    u_gpu .= ifelse.(SnR_gpu .< snrthresh, NaN, u_gpu)
-    v_gpu .= ifelse.(SnR_gpu .< snrthresh, NaN, v_gpu)
+    u .= ifelse.(SnR .< snrthresh, NaN, u)
+    v .= ifelse.(SnR .< snrthresh, NaN, v)
 
     # Reject data with too-low correlation peak height
     pkhthresh::Float32 = 0.3
-    u_gpu .= ifelse.(Pkh_gpu .< pkhthresh, NaN, u_gpu)
-    v_gpu .= ifelse.(Pkh_gpu .< pkhthresh, NaN, v_gpu)
+    u .= ifelse.(Pkh .< pkhthresh, NaN, u)
+    v .= ifelse.(Pkh .< pkhthresh, NaN, v)
 
-    copyto!(u, u_gpu)
-    copyto!(v, v_gpu)
-    
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
 
@@ -1200,7 +1192,7 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     #                 ylimits=(0, 200), 
     #                 xlimits=(0, 385))
     # dbl_plot = plot(u_map, v_map, layout = (2, 1))
-    # png(dbl_plot, "../../tests/gpu_tests/output.png")
+    # png(dbl_plot, "../../tests/gpu_tests/output2.png")
 
 end
 # end
