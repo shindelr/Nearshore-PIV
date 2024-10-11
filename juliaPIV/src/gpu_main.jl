@@ -11,6 +11,7 @@ using Interpolations
 using Plots
 using Luxor            # For creating inpolygon() functionality
 using CUDA
+using StaticArrays     # Helpful for array allocations in kernels
 
 # PASS FUNCTIONS 
 """
@@ -888,8 +889,6 @@ end
 """
 function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32}, 
                     v::Matrix{Float32}, threshold::Int32, median_bool=true, m=3)
-    IN = zeros(eltype(u), size(u))
-
     dim1 = round(Int32, size(u, 1) + 2 * floor(m / 2))
     dim2 = round(Int32, size(u, 2) + 2 * floor(m / 2))
     nu = zeros(eltype(u), (dim1, dim2)) * NaN
@@ -901,36 +900,18 @@ function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32},
     nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
     nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
 
-    INx = zeros(eltype(nu), size(nu))
-    INx[from_cols:end-minus_rows, from_cols:end-minus_rows] = IN
+    # Allocate space to GPU
+    nv_cu = CuArray{Float32}(undef, size(nv))
+    nu_cu = CuArray{Float32}(undef, size(nu))
+    copyto!(nv_cu, nv)
+    copyto!(nu_cu, nu)
 
-    U2::Matrix{ComplexF32} = nu .+ im .* nv
+    U2::CuArray{ComplexF32} = nu .+ im .* nv
 
-    ma, na = size(U2)
-    histostd = zeros(ComplexF32, size(nu))
-    histo = zeros(ComplexF32, size(nu))
+    histostd = CUDA.zeros(ComplexF32, size(U2, 1), size(U2, 2))
+    histo = CUDA.zeros(ComplexF32, size(U2, 1), size(U2, 2))
 
-    for ii in m-1:1:na-m+2
-        for jj in m-1:1:ma-m+2
-
-            if INx[jj, ii] != 1
-                m_floor_two = floor(Int32, m / 2)
-                tmp = U2[jj-m_floor_two:jj+m_floor_two,
-                    ii-m_floor_two:ii+m_floor_two]
-                tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
-
-                # Run the appropriate stat depending on method arg.
-                usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
-                histostd[jj, ii] = im_std(tmp[:])
-
-            else
-                usum = NaN
-                tmp = NaN
-                histostd[jj, ii] = NaN
-            end
-            histo[jj, ii] = usum
-        end
-    end
+    localfilt_kernel_launcher!(U2, histo, histostd)
 
     # Locate gridpoints w/higher value than the threshold
     coords = findall(
@@ -938,6 +919,11 @@ function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32},
         (imag(U2) .> imag(histo) .+ threshold .* imag(histostd)) .|
         (real(U2) .< real(histo) .- threshold .* real(histostd)) .|
         (imag(U2) .< imag(histo) .- threshold .* imag(histostd)))
+
+    # Download back from GPU
+    nv = Array(nv_cu)
+    nu = Array(nu_cu)
+    coords = Array(coords)
 
     # Then "filter" those points out by changing them to NaN!
     for jj in eachindex(coords)
@@ -952,6 +938,122 @@ function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32},
 
     return hu, hv
 end
+
+function localfilt_kernel_launcher!(U2, histo, histostd)
+    # 2D array size
+    M = size(U2, 1)
+    N = size(U2, 2)
+
+    # Get config for kernel
+    kernel = @cuda launch=false localfilt_kernel!(U2, histo, histostd)
+    config = launch_configuration(kernel.fun)
+
+    # Specificy nukber of threads and blocks for 2D array
+    threads_x = Int32(min(M, sqrt(config.threads)))
+    threads_y = Int32(min(N, sqrt(config.threads)))
+    # For aquilla, the threads cannot be more than 1024
+    @assert threads_x * threads_y <= config.threads
+
+    blocks_x = Int32(cld(M, threads_x))
+    blocks_y = Int32(cld(N, threads_y))
+    
+    CUDA.@sync begin
+        kernel(U2, histo, histostd; 
+               threads=(threads_x, threads_y), blocks=(blocks_x, blocks_y)
+            )
+    end
+end
+
+
+function localfilt_kernel!(U2, histo, histostd)
+    i = threadIdx().x + (blockIdx().x - Int32(1)) * blockDim().x
+    j = threadIdx().y + (blockIdx().y - Int32(1)) * blockDim().y
+
+    # subarray = @MVector zeros(ComplexF32, 9)
+    subarray::CuArray{ComplexF32} = [0+0*im for _ in 1:9]
+
+    if i > 1 && i < size(U2, 1) && j > 1 && j < size(U2, 2)
+
+        # 1) Get subarray in a really ugly way
+        @inbounds begin
+            subarray[1] = U2[j-1, i-1]
+            subarray[2] = U2[j-1, i]
+            subarray[3] = U2[j-1, i+1]
+            subarray[4] = U2[j, i-1]
+            subarray[5] = NaN + NaN * im
+            subarray[6] = U2[j, i+1]
+            subarray[7] = U2[j+1, i-1]
+            subarray[8] = U2[j+1, i]
+            subarray[9] = U2[j+1, i+1]
+
+            # 2) Filter out NaN values
+            # valid_vals = @MVector fill(ComplexF32(NaN + NaN * im), 9)
+            valid_vals = ComplexF32[NaN+NaN*im for _ in 1:9]
+
+            not_nan_count = 0
+            for index in 1:length(subarray)
+                if !isnan(real(subarray[index])) && !isnan(imag(subarray[index])) 
+                    not_nan_count += 1
+                    valid_vals[not_nan_count] = subarray[index]
+                end
+            end
+            if not_nan_count == 0
+                # histo[j, i] = NaN Might not be any need because it's already NaN
+                return
+            end
+
+            # 3) Sort based on abs2(x), then angle(x). Insertion sort algo
+            for k in 2:not_nan_count
+                l = k
+                while l > 1 && (abs2(valid_vals[l]) > abs2(valid_vals[l-1]) ||
+                                (abs2(valid_vals[l]) == abs2(valid_vals[l-1]) &&
+                                angle(valid_vals[l]) > angle(valid_vals[l-1])))
+                    
+                    temp = valid_vals[l]
+                    valid_vals[l] = valid_vals[l - 1]
+                    valid_vals[l - 1] = temp
+                    l -= 1
+                end
+            end
+
+            # 4) Get median value
+            mid = div(not_nan_count, 2)
+            if not_nan_count % 2 == 0
+                median = (valid_vals[mid] + valid_vals[mid + 1]) / 2
+            else
+                median = valid_vals[mid + 1]
+            end
+
+            # 5) Get standard deviation
+            real_mean = 0
+            im_mean = 0
+            real_var = 0
+            im_var = 0
+            for k in 1:not_nan_count
+                real_mean += real(valid_vals[k])
+                im_mean += imag(valid_vals[k])
+            end
+            real_mean /= not_nan_count
+            im_mean /= not_nan_count
+
+            for k in 1:not_nan_count
+                real_var += (valid_vals[k] - real_mean)^2
+                im_var += (valid_vals[k] - im_mean)^2
+            end
+            real_std = sqrt(real_var / not_nan_count)
+            im_std = sqrt(im_var / not_nan_count)
+
+            std = real_std + im_std * im
+
+            # 6) Set histo[j, i] and histostd[j, i]
+            histo[i, j] = median
+            histostd[i, j] = std
+        end
+
+    end
+    return
+end
+
 
 """
     intpeak(x1, y1, R, Rxm1, Rxp1, Rym1, Ryp1, N)
@@ -1146,8 +1248,9 @@ end
     ----------
 
 """
-function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32, 
-                                                    ol::Float32) where {T}
+# function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32, 
+#                                                     ol::Float32) where {T}
+function main(image_pair, final_win_size::Int32, ol::Float32)
     # Convert the images to matrices of floats
     A = convert(Matrix{Float32}, image_pair[1])
     B = convert(Matrix{Float32}, image_pair[2])
@@ -1186,6 +1289,7 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     u, v = globfilt(u, v)
 
     # return ((x, y), (u, v), pass_sizes)
+    return
 
     # Plotting stuff
     # u_map = heatmap(u, 
@@ -1213,7 +1317,7 @@ function timed_main()
     crops = (24, 2424, 1, 2048)
     im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
     im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
-    im_pair = (Gray.(im1), Gray.(im2))
+    im_pair = (cu(Gray.(im1)), cu(Gray.(im2)))
 
     main(im_pair, Int32(16), Float32(0.5))
 end
