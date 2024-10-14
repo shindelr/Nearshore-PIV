@@ -1,29 +1,64 @@
 using CUDA
 using StaticArrays
+using Statistics
 using DelimitedFiles
+
+function localfilt_kernel_launcher!(U2, histo, histostd)
+    # 2D array size
+    M = size(U2, 1)
+    N = size(U2, 2)
+
+    # Get config for kernel
+    kernel = @cuda launch=false localfilt_kernel!(U2, histo, histostd)
+    config = launch_configuration(kernel.fun)
+
+    # Specificy nukber of threads and blocks for 2D array
+    threads_x = Int32(min(M, sqrt(config.threads)))
+    threads_y = Int32(min(N, sqrt(config.threads)))
+    # For aquilla, the threads cannot be more than 1024
+    @assert threads_x * threads_y <= config.threads
+
+    blocks_x = Int32(cld(M, threads_x))
+    blocks_y = Int32(cld(N, threads_y))
+    
+    CUDA.@sync begin
+        kernel(U2, histo, histostd; 
+               threads=(threads_x, threads_y), blocks=(blocks_x, blocks_y)
+            )
+    end
+end
+
 
 function localfilt_kernel!(U2, histo, histostd)
     i = threadIdx().x + (blockIdx().x - Int32(1)) * blockDim().x
     j = threadIdx().y + (blockIdx().y - Int32(1)) * blockDim().y
 
-
     if i > 1 && i < size(U2, 1) && j > 1 && j < size(U2, 2)
-        # 1) Get subarray info
+
         @inbounds begin
-            subarray = @view U2[1:3, 1:3]
+            subarray = @view U2[i-1:i+1, j-1:j+1]
 
             # 2) Filter out NaN values
             valid_vals = @MVector fill(ComplexF32(NaN + NaN * im), 9)
 
+            # not_nan_count = 0
+            # for index in 1:length(subarray)
+            #     if !isnan(real(subarray[index])) && !isnan(imag(subarray[index])) 
+            #         not_nan_count += 1
+            #         valid_vals[not_nan_count] = subarray[index]
+            #     end
+            # end
+
             not_nan_count = 0
-            for val in subarray
-                if !isnan(real(val)) && !isnan(imag(val)) 
+            for (idx, val) in enumerate(subarray)
+                if !isnan(real(val)) && !isnan(imag(val)) && idx != 5
                     not_nan_count += 1
                     valid_vals[not_nan_count] = val
                 end
             end
+
             if not_nan_count == 0
-                # histo[j, i] = NaN Might not be any need because it's already NaN
+                histo[j, i] = NaN
                 return
             end
 
@@ -63,7 +98,7 @@ function localfilt_kernel!(U2, histo, histostd)
 
             for k in 1:not_nan_count
                 real_var += (valid_vals[k] - real_mean)^2
-                im_var += (valid_vals[k] - real_mean)^2
+                im_var += (valid_vals[k] - im_mean)^2
             end
             real_std = sqrt(real_var / not_nan_count)
             im_std = sqrt(im_var / not_nan_count)
@@ -79,50 +114,14 @@ function localfilt_kernel!(U2, histo, histostd)
     return
 end
 
-# function localfilt_kernel_config(U2)
-function localfilt_kernel_config()
-    U2 = CUDA.CuArray(ComplexF32[
+# function localfilt(U2)
+function localfilt()
+    U2 = @SMatrix ComplexF32[
         3 + 4im 1 + 2im 7 + 8im 0 + 0im 5 + 6im;
         9 + 10im 11 - 12im 15 - 16im 13 + 14im 7 - 8im;
         21 + 22im 17 + 18im 19 - 20im 25 + 26im 15 - 16im;
         27 - 28im 23 - 24im 29 + 30im 31 - 32im 25 + 26im
-    ])
-
-    histo = CUDA.zeros(ComplexF32, size(U2, 1), size(U2, 2))
-    histostd = CUDA.zeros(ComplexF32, size(U2, 1), size(U2, 2))
-
-    # 2D array size
-    M = size(U2, 1)
-    N = size(U2, 2)
-
-    # Get config for kernel
-    kernel = @cuda launch=false localfilt_kernel!(U2, histo, histostd)
-    config = launch_configuration(kernel.fun)
-
-    # Specificy nukber of threads and blocks for 2D array
-    threads_x = Int32(min(M, sqrt(config.threads)))
-    threads_y = Int32(min(N, sqrt(config.threads)))
-    # For aquilla, the threads cannot be more than 1024
-    @assert threads_x * threads_y <= config.threads
-
-    blocks_x = Int32(cld(M, threads_x))
-    blocks_y = Int32(cld(N, threads_y))
-    
-    CUDA.@sync begin
-        kernel(U2, histo, histostd; 
-               threads=(threads_x, threads_y), blocks=(blocks_x, blocks_y)
-            )
-    end
-    return histo
-end
-
-function localfilt(U2)
-    # U2 = @SMatrix ComplexF32[
-    #     3 + 4im 1 + 2im 7 + 8im 0 + 0im 5 + 6im;
-    #     9 + 10im 11 - 12im 15 - 16im 13 + 14im 7 - 8im;
-    #     21 + 22im 17 + 18im 19 - 20im 25 + 26im 15 - 16im;
-    #     27 - 28im 23 - 24im 29 + 30im 31 - 32im 25 + 26im
-    # ]
+    ]
  
     histo = zeros(ComplexF32, size(U2, 1), size(U2, 2))
     histostd = zeros(ComplexF32, size(U2, 1), size(U2, 2))
@@ -141,11 +140,14 @@ function localfilt(U2)
             tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
 
             # Run the appropriate stat depending on method arg.
+            if ii == 2 && jj == 2
+                display(tmp[:])
+            end
             histo[jj, ii] = im_median_magnitude(tmp[:])
             histostd[jj, ii] = im_std(tmp[:])
         end
     end
-    return histo, histostd
+    return histo
 end
 
 function im_median_magnitude(collection)
