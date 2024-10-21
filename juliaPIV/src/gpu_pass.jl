@@ -12,15 +12,18 @@ function main()
     im2_cu = CuArray{Float32}(undef, size(im_pair[2]))
     copyto!(im1_cu, im_pair[1])
     copyto!(im2_cu, im_pair[2])
-
-    test_win = CUDA.zeros(Float32, size(im_pair[1]))
-
+    
     # Other params
     win_size = Int32(64)
     ol = 0.5f0
 
+    
+
+
+    
     # Kernel config here:
-    gpu_pass_launch(im1_cu, im2_cu, win_size, ol, test_win)
+    # test_win = CUDA.zeros(Float32, size(im_pair[1]))
+    # gpu_pass_launch(im1_cu, im2_cu, win_size, ol, test_win)
 end
 
 function load_images()
@@ -59,8 +62,8 @@ function gpu_pass!(im1::CuDeviceMatrix{Float32}, im2::CuDeviceMatrix{Float32},
     num_windows = M / win_size
     row = i / num_windows
     col = i % num_windows
-
-    half_win = win_size / 32
+ 
+    half_win = win_size / 2
     center_x = row * win_size + half_win
     center_y = col * win_size + half_win
 
@@ -69,22 +72,22 @@ function gpu_pass!(im1::CuDeviceMatrix{Float32}, im2::CuDeviceMatrix{Float32},
 
         @inbounds begin
             C = @view im1[center_x - half_win: center_x + half_win,
-                          center_y - half_win: center_y + half_win] 
+                        center_y - half_win: center_y + half_win]
+
             D = @view im2[center_x - half_win: center_x + half_win,
-                          center_y - half_win: center_y + half_win]
-        end
-
-        if i == 32
-            @cushow center_x center_y
-            # for i in 1:size(C, 1)
-            #     for j in 1:size(C, 2)
-            #         test_win[i, j] = C[i, j]
-            #     end
-            # end
-        end
+                        center_y - half_win: center_y + half_win]
+            
+            if i == 32
+                @cushow center_x center_y
+                for i in 1:size(C, 1)
+                    for j in 1:size(C, 2)
+                        C[i, j]
+                        # test_win[i, j] = C[i, j]
+                    end
+                end
+            end
         
-
-
+        end
     end
         
 
