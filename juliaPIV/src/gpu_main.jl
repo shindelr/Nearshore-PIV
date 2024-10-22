@@ -37,8 +37,8 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     # Convert the images to matrices of floats
     A = convert(Matrix{Float32}, image_pair[1])
     B = convert(Matrix{Float32}, image_pair[2])
-    A_cu = CuArray(A)
-    B_cu = CuArray(B)
+    # A_cu = CuArray(A)
+    # B_cu = CuArray(B)
 
     pivwin = 16
     log2pivwin::Int32 = log2(pivwin)
@@ -53,7 +53,8 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     dt::Int32 = 1
     overlap::Float32 = ol
     validvec::Int32 = 3
-    x, y, u, v, SnR, Pkh = multipassx(A_cu, B_cu, pass_sizes, dt, overlap, validvec)
+    # x, y, u, v, SnR, Pkh = multipassx(A_cu, B_cu, pass_sizes, dt, overlap, validvec)
+    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
     # Reject data with too-low signal-to-noise level
     snrthresh::Float32 = 1.3
@@ -181,10 +182,12 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     # Set up for FFT plans
     pad_matrix_a = pad_for_xcorr(A[1:M, 1:N])
     pad_matrix_b = pad_for_xcorr(B[1:M, 1:N])
-    P = CUDA.CUFFT.plan_fft(pad_matrix_a; flags=FFTW.ESTIMATE)
-    Pi = CUDA.CUFFT.plan_ifft(pad_matrix_a; flags=FFTW.ESTIMATE)
-    pad_matrix_a = CuArray(pad_matrix_a)
-    pad_matrix_b = CuArray(pad_matrix_b)
+    # pad_matrix_a = CuArray(pad_matrix_a)
+    # pad_matrix_b = CuArray(pad_matrix_b)
+    P = plan_fft(pad_matrix_a; flags=FFTW.ESTIMATE)
+    Pi = plan_ifft(pad_matrix_a; flags=FFTW.ESTIMATE)
+    # P = CUDA.CUFFT.plan_fft(pad_matrix_a)
+    # Pi = CUDA.CUFFT.plan_ifft(pad_matrix_a)
 
     # Initializing matrices
     sy, sx = size(A)
@@ -195,23 +198,26 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     xx = zeros(eltype(A), (xx_dim1, xx_dim2))
     yy = zeros(eltype(A), (xx_dim1, xx_dim2))
     
-    # GPU?
+    # Allocate idx/y GPU
     idx_cu = CuArray{Float32}(undef, size(idx))
     idy_cu = CuArray{Float32}(undef, size(idy))
     copyto!(idx_cu, idx)
     copyto!(idy_cu, idy)
-
-    C = CuArray{Float32}(undef, (M, N))
-    D = CuArray{Float32}(undef, (M, N))
-
+    # Run kernel
     num_blocks = ceil(Int, size(idx, 1)/256)
     CUDA.@sync begin
         @cuda threads=256 blocks=num_blocks set_nan_zero_kernel!(idx_cu, idy_cu)
     end
-
     # Copy down from GPU
     idx = Array(idx_cu)
     idy = Array(idy_cu)
+
+    # Use this function to make windows
+    winds_A = []
+    get_windows!(winds_A, A, N, overlap)
+    display(winds_A)
+    winds_B = []
+    get_windows!(winds_B, B, N, overlap)
     
     cj = 1
     # Steps are 0.5 * 64 = 32, moves windown by half window size
@@ -236,11 +242,6 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
             D = B[Int32(jj + idy[cj, ci]):Int32(jj + N - 1 + idy[cj, ci]),
                 Int32(ii + idx[cj, ci]):Int32(ii + M - 1 + idx[cj, ci])]
             
-            # copyto!(C, 
-            #         A[Int32(jj):Int32(jj + N - 1), Int32(ii):Int32(ii + M - 1)])
-            # copyto!(D,
-            #         B[Int32(jj + idy[cj, ci]):Int32(jj + N - 1 + idy[cj, ci]), Int32(ii + idx[cj, ci]):Int32(ii + M - 1 + idx[cj, ci])])
-
             C = C .- mean(C)
             D = D .- mean(D)
 
@@ -255,15 +256,21 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
             end
 
             # Call xcorrf2, passing in the FFT plan and normalize result
-            R::Matrix{Float32} = xcorrf2(C, D, P, Pi, pad_matrix_a, pad_matrix_b) ./ (N * M * stad1 * stad2)
+            R_cu::CuArray{Float32} = xcorrf2(C, D, P, Pi, pad_matrix_a, pad_matrix_b)
+            normalizer = (N * M * stad1 * stad2)
+            R_cu = R_cu .* (1 / normalizer)
+
+            # Bring down from GPU
+            R = Array(R_cu)
 
             # Find position of maximal value of R
             max_coords = Vector{Tuple{Int32,Int32}}()
+            # max_coords = CuArray{Tuple{Int32,Int32}}(0, 10)
             if size(R, 1) == (N - 1)
                 fast_max!(max_coords, R)
             else
                 subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3),
-                    Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
+                            Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
                 fast_max!(max_coords, subset)
                 # Adjust for subset positions
                 max_coords = [(i[1] + Int32(0.5 * N + 1), i[2] + Int32(0.5 * M + 1))
@@ -312,10 +319,6 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
         cj += 1
     end
     return xx, yy, datax, datay
-end
-
-function firstpass_kernel!()
-    
 end
 
 """
@@ -530,6 +533,24 @@ function finalpass(A::Matrix{T}, B::Matrix{T}, N::Int32, ol::Float32,
     return xp, yp, up, vp, SnR, Pkh
 end
 
+function get_windows!(winds, matrix, win_size, ol)
+    M, N = size(matrix)
+    ol_win = Int32(ol * win_size)
+       for i in 1:M
+           for j in 1:N
+                row_end = max(i + ol_win - 1, M)
+                col_end = ma(j + ol_win - 1, M)
+                # if i + row_end <= win_size || j + col_end <= win_size 
+                if row_end >= i && col_end >= j
+                    if i > 2000 && j > 2000
+                        @show size(matrix[i:row_end, j:col_end])
+                    end
+                    push!(winds, @view matrix[i:row_end, j:col_end])
+                end
+           end
+       end
+end
+
 function set_nan_zero_kernel!(idx::CuDeviceMatrix{Float32}, idy::CuDeviceMatrix{Float32})
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
@@ -565,8 +586,8 @@ end
     ----------
         A padded matrix of zeros up to the next power of 2 of the window size.
 """
-# function pad_for_xcorr(trunc_matrix::Matrix{Float32})
-function pad_for_xcorr(trunc_matrix::CuArray{Float32})
+function pad_for_xcorr(trunc_matrix::Matrix{Float32})
+# function pad_for_xcorr(trunc_matrix::CuArray{Float32})
     ma, na = size(trunc_matrix)
     mf = nextpow(2, ma + na)
     return zeros(ComplexF32, mf, mf)
@@ -614,10 +635,14 @@ function xcorrf2(A::T, B::T, plan, iplan, pad_matrix_a::CuArray{ComplexF32},
     pad_matrix_a[1:size(A, 1), 1:size(A, 2)] .= A
     pad_matrix_b[1:size(B, 1), 1:size(B, 2)] .= B
 
+    fft = (plan * pad_matrix_b) .* (plan * pad_matrix_b)
+    ifft = iplan * fft
+    return real(ifft[1:ma+mb-1, 1:na+nb-1])
+
     # Performs FFTs, inverse FFT, then trim the result
     # I did it this weird way to avoid four array allocations
-    return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
-    )[1:ma+mb-1, 1:na+nb-1]
+    # return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
+    # )[1:ma+mb-1, 1:na+nb-1]
 end
 
 
@@ -1237,6 +1262,7 @@ Returns
 - `max_coords::Vector{Tuple{Int32, Int32}}`: The updated vector containing the coordinates of the maximum value(s).
 """
 function fast_max!(max_coords::Vector{Tuple{Int32,Int32}}, collection::Matrix{Float32})
+# function fast_max!(max_coords::CuArray{Tuple{Int32, Int32}}, collection::CuArray{Float32})
     max_val::Float64 = -Inf
     for i in axes(collection, 1)
         for j in axes(collection, 2)
