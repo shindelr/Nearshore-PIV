@@ -180,14 +180,12 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     M = N
 
     # Set up for FFT plans
-    pad_matrix_a = pad_for_xcorr(A[1:M, 1:N])
-    pad_matrix_b = pad_for_xcorr(B[1:M, 1:N])
-    # pad_matrix_a = CuArray(pad_matrix_a)
-    # pad_matrix_b = CuArray(pad_matrix_b)
-    P = plan_fft(pad_matrix_a; flags=FFTW.ESTIMATE)
-    Pi = plan_ifft(pad_matrix_a; flags=FFTW.ESTIMATE)
-    # P = CUDA.CUFFT.plan_fft(pad_matrix_a)
-    # Pi = CUDA.CUFFT.plan_ifft(pad_matrix_a)
+    pad_matrix_a = cu(pad_for_xcorr(A[1:M, 1:N]))
+    pad_matrix_b = cu(pad_for_xcorr(B[1:M, 1:N]))
+    # P = plan_fft(pad_matrix_a; flags=FFTW.ESTIMATE)
+    # Pi = plan_ifft(pad_matrix_a; flags=FFTW.ESTIMATE)
+    P = CUDA.CUFFT.plan_fft(pad_matrix_a)
+    Pi = CUDA.CUFFT.plan_ifft(pad_matrix_a)
 
     # Initializing matrices
     sy, sx = size(A)
@@ -203,6 +201,7 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     idy_cu = CuArray{Float32}(undef, size(idy))
     copyto!(idx_cu, idx)
     copyto!(idy_cu, idy)
+
     # Run kernel
     num_blocks = ceil(Int, size(idx, 1)/256)
     CUDA.@sync begin
@@ -212,111 +211,70 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     idx = Array(idx_cu)
     idy = Array(idy_cu)
 
-    # Use this function to make windows
-    winds_A = []
-    get_windows!(winds_A, A, N, overlap)
-    display(winds_A)
-    winds_B = []
-    get_windows!(winds_B, B, N, overlap)
-    
-    cj = 1
-    # Steps are 0.5 * 64 = 32, moves windown by half window size
-    for jj in 1:((1-overlap)*N):(sy-N+1)
-        ci = 1
-        for ii in 1:((1-overlap)*M):(sx-M+1)
+    # Normalize against the mean and take all standard devs and get all windows
+    winds_A::Vector{CuArray{Float32}} = []
+    winds_B::Vector{CuArray{Float32}} = []
+    stad1_vec = Vector{Float32}(undef, length(winds_A))
+    stad2_vec = Vector{Float32}(undef, length(winds_A))
+    get_windows!(winds_A, winds_B, A, B, idx, idy, N, overlap, stad1_vec, stad2_vec)
 
-            if (jj + idy[cj, ci]) < 1
-                idy[cj, ci] = 1 - jj
-            elseif (jj + idy[cj, ci]) > (sy - N + 1)
-                idy[cj, ci] = sy - N + 1 - jj
-            end
+    # Call xcorrf2, passing in the FFT plan and normalize result
+    R::Vector{CuArray{Float32}} = []
+    for idx in eachindex(winds_A)
+        corr =  xcorrf2(winds_A[idx], winds_B[idx], P, Pi, pad_matrix_a, pad_matrix_b)
+        normalizer = (N * M * stad1_vec[idx] * stad2_vec[idx])
+        push!(R, corr .* (1 / normalizer))
+    end
 
-            if (ii + idx[cj, ci]) < 1
-                idx[cj, ci] = 1 - ii
-            elseif (ii + idx[cj, ci]) > (sx - M + 1)
-                idx[cj, ci] = sx - M + 1 - ii
-            end
+    # LEFT OFF HERE! CAN WE PARALLELIZE?
+    # Find position of maximal value of R
+    max_coords = Vector{Tuple{Int32,Int32}}()
+    if size(R, 1) == (N - 1)
+        fast_max!(max_coords, R)
+    else
+        subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3),
+                    Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
+        fast_max!(max_coords, subset)
+        # Adjust for subset positions
+        max_coords = [(i[1] + Int32(0.5 * N + 1), i[2] + Int32(0.5 * M + 1))
+                        for i in max_coords]
+    end
 
-            C = A[Int32(jj):Int32(jj + N - 1),
-                Int32(ii):Int32(ii + M - 1)]
-            D = B[Int32(jj + idy[cj, ci]):Int32(jj + N - 1 + idy[cj, ci]),
-                Int32(ii + idx[cj, ci]):Int32(ii + M - 1 + idx[cj, ci])]
-            
-            C = C .- mean(C)
-            D = D .- mean(D)
-
-            stad1 = std(C)
-            stad2 = std(D)
-
-            if stad1 == 0
-                stad1 = NaN
-            end
-            if stad2 == 0
-                stad2 = NaN
-            end
-
-            # Call xcorrf2, passing in the FFT plan and normalize result
-            R_cu::CuArray{Float32} = xcorrf2(C, D, P, Pi, pad_matrix_a, pad_matrix_b)
-            normalizer = (N * M * stad1 * stad2)
-            R_cu = R_cu .* (1 / normalizer)
-
-            # Bring down from GPU
-            R = Array(R_cu)
-
-            # Find position of maximal value of R
-            max_coords = Vector{Tuple{Int32,Int32}}()
-            # max_coords = CuArray{Tuple{Int32,Int32}}(0, 10)
-            if size(R, 1) == (N - 1)
-                fast_max!(max_coords, R)
-            else
-                subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3),
-                            Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
-                fast_max!(max_coords, subset)
-                # Adjust for subset positions
-                max_coords = [(i[1] + Int32(0.5 * N + 1), i[2] + Int32(0.5 * M + 1))
-                                for i in max_coords]
-            end
-
-            # Handle a vector that has multiple maximum coordinates.
-            # Sum the product of each x and y indice with its own indice within
-            # the max_coords vector.
-            if length(max_coords) >= 1
-                if length(max_coords) == 1
-                    max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
-                else
-                    max_x1 = round(
-                        Int32, 
-                        sum([c[2] * i for (i, c) in enumerate(max_coords)]) /
-                            sum([c[2] for c in max_coords])
-                            )
-                    max_y1 = round(
-                        Int32, 
-                        sum([c[1] * i for (i, c) in enumerate(max_coords)]) /
-                            sum([c[1] for c in max_coords])
-                            )
-                end
-                # Store displacements in variables datax/datay
-                datax[cj, ci] -= (max_x1 - M) + idx[cj, ci]
-                datay[cj, ci] -= (max_y1 - M) + idy[cj, ci]
-                xx[cj, ci] = ii + M / 2
-                yy[cj, ci] = ii + N / 2
-
-            # Empty max_coords vector
-            else
-                idx[cj, ci] = 0
-                idy[cj, ci] = 0
-                max_x1 = NaN
-                max_y1 = NaN
-
-                datax[cj, ci] = NaN
-                datay[cj, ci] = NaN
-                xx[cj, ci] = ii + M / 2
-                yy[cj, ci] = ii + N / 2  
-            end
-
-            ci += 1
+    # Handle a vector that has multiple maximum coordinates.
+    # Sum the product of each x and y indice with its own indice within
+    # the max_coords vector.
+    if length(max_coords) >= 1
+        if length(max_coords) == 1
+            max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
+        else
+            max_x1 = round(
+                Int32, 
+                sum([c[2] * i for (i, c) in enumerate(max_coords)]) /
+                    sum([c[2] for c in max_coords])
+                    )
+            max_y1 = round(
+                Int32, 
+                sum([c[1] * i for (i, c) in enumerate(max_coords)]) /
+                    sum([c[1] for c in max_coords])
+                    )
         end
-        cj += 1
+        # Store displacements in variables datax/datay
+        datax[cj, ci] -= (max_x1 - M) + idx[cj, ci]
+        datay[cj, ci] -= (max_y1 - M) + idy[cj, ci]
+        xx[cj, ci] = ii + M / 2
+        yy[cj, ci] = ii + N / 2
+
+    # Empty max_coords vector
+    else
+        idx[cj, ci] = 0
+        idy[cj, ci] = 0
+        max_x1 = NaN
+        max_y1 = NaN
+
+        datax[cj, ci] = NaN
+        datay[cj, ci] = NaN
+        xx[cj, ci] = ii + M / 2
+        yy[cj, ci] = ii + N / 2  
     end
     return xx, yy, datax, datay
 end
@@ -533,21 +491,66 @@ function finalpass(A::Matrix{T}, B::Matrix{T}, N::Int32, ol::Float32,
     return xp, yp, up, vp, SnR, Pkh
 end
 
-function get_windows!(winds, matrix, win_size, ol)
-    M, N = size(matrix)
-    ol_win = Int32(ol * win_size)
-       for i in 1:M
-           for j in 1:N
-                row_end = max(i + ol_win - 1, M)
-                col_end = ma(j + ol_win - 1, M)
-                # if i + row_end <= win_size || j + col_end <= win_size 
-                if row_end >= i && col_end >= j
-                    if i > 2000 && j > 2000
-                        @show size(matrix[i:row_end, j:col_end])
-                    end
-                    push!(winds, @view matrix[i:row_end, j:col_end])
+function gpu_mean_and_std!(winds_A::T, winds_B::T, stds_A::F, stds_B::F) where {T, F}
+    
+    for i in eachindex(winds_A)
+        winds_A[i] .= winds_A[i] .- mean(winds_A[i]) 
+        winds_B[i] .= winds_A[i] .- mean(winds_B[i]) 
+
+        stds_A[i] = gpu_fast_std(winds_A[i])
+        stds_B[i] = gpu_fast_std(winds_B[i])
+    end
+end
+
+function gpu_fast_std(collection::CuArray{Float32})
+    mu = mean(collection)
+    deviation = collection .- mu
+    std = sqrt(mean(deviation .^ 2))
+    # Return NaN if 0 otherwise, return the standard deviation
+    return ifelse(std == 0, NaN, std)
+end
+
+function get_windows!(winds_im1::Vector{CuArray{Float32}}, 
+                    winds_im2::Vector{CuArray{Float32}}, 
+                    im1::T, im2::T, displace_x::T, displace_y::T, 
+                    win_size::Int32, ol::Float32, stad1_vec::Vector{Float32}, 
+                    stad2_vec::Vector{Float32}) where {T}
+
+    M, N = size(im1)
+    ci = 1
+       for i in 1:(1 - ol) * win_size:M - win_size + 1
+        cj = 1
+           for j in 1:(1 - ol) * win_size:N - win_size + 1
+                i = Int32(i)
+                j = Int32(j)
+
+                # Calculate some displacement thing
+                if (i + displace_x[ci, cj]) < 1
+                    displace_x[ci, cj] = 1 - i
+                elseif (i + displace_x[ci, cj]) > (M - win_size + 1)
+                    displace_x[ci, cj] = M - win_size + 1 - i
+                end                
+                
+                if (j + displace_y[ci, cj]) < 1
+                    displace_y[ci, cj] = 1 - j
+                elseif (j + displace_y[ci, cj]) > (N - win_size + 1)
+                    displace_y[ci, cj] = N - win_size + 1 - j
                 end
+
+                # Push windows of image 1 normalized against the mean
+                window = cu(im1[i: Int32(i + win_size - 1), j: Int32(j + win_size - 1)])
+                push!(winds_im1, window .- mean(window))
+                push!(stad1_vec, gpu_fast_std(window))
+
+                # Push windows of image 2 with displacement data normalized against the mean
+                window = cu(im2[Int32(i + displace_x[ci, cj]):Int32(i + win_size - 1 + displace_x[ci, cj]),
+                                Int32(j + displace_y[ci, cj]):Int32(j + win_size - 1 + displace_y[ci, cj])])
+                push!(winds_im2, window .- mean(window))
+                push!(stad2_vec, gpu_fast_std(window))
+
+                cj += 1
            end
+           ci += 1
        end
 end
 
