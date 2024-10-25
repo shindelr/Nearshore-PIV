@@ -56,36 +56,36 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     # x, y, u, v, SnR, Pkh = multipassx(A_cu, B_cu, pass_sizes, dt, overlap, validvec)
     x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
 
-    # Reject data with too-low signal-to-noise level
-    snrthresh::Float32 = 1.3
-    u .= ifelse.(SnR .< snrthresh, NaN, u)
-    v .= ifelse.(SnR .< snrthresh, NaN, v)
+    # # Reject data with too-low signal-to-noise level
+    # snrthresh::Float32 = 1.3
+    # u .= ifelse.(SnR .< snrthresh, NaN, u)
+    # v .= ifelse.(SnR .< snrthresh, NaN, v)
 
-    # Reject data with too-low correlation peak height
-    pkhthresh::Float32 = 0.3
-    u .= ifelse.(Pkh .< pkhthresh, NaN, u)
-    v .= ifelse.(Pkh .< pkhthresh, NaN, v)
+    # # Reject data with too-low correlation peak height
+    # pkhthresh::Float32 = 0.3
+    # u .= ifelse.(Pkh .< pkhthresh, NaN, u)
+    # v .= ifelse.(Pkh .< pkhthresh, NaN, v)
 
-    # Reject data that disagree strongly with their neighbors in a local window
-    u, v = globfilt(u, v)
+    # # Reject data that disagree strongly with their neighbors in a local window
+    # u, v = globfilt(u, v)
 
-    # return ((x, y), (u, v), pass_sizes)
-    # return
+    # # return ((x, y), (u, v), pass_sizes)
+    # # return
 
-    # Plotting stuff
-    # u_map = heatmap(u, 
-    #                 title = "u [pixels/frame]", 
-    #                 aspect_ratio = :equal, 
-    #                 limits=(0, 200), 
-    #                 xlimits=(0, 385))
+    # # Plotting stuff
+    # # u_map = heatmap(u, 
+    # #                 title = "u [pixels/frame]", 
+    # #                 aspect_ratio = :equal, 
+    # #                 limits=(0, 200), 
+    # #                 xlimits=(0, 385))
 
-    # v_map = heatmap(v, 
-    #                 title = "v [pixels/frame]", 
-    #                 aspect_ratio = :equal, 
-    #                 ylimits=(0, 200), 
-    #                 xlimits=(0, 385))
-    # dbl_plot = plot(u_map, v_map, layout = (2, 1))
-    # png(dbl_plot, "../../tests/gpu_tests/output_20241021T0933.png")
+    # # v_map = heatmap(v, 
+    # #                 title = "v [pixels/frame]", 
+    # #                 aspect_ratio = :equal, 
+    # #                 ylimits=(0, 200), 
+    # #                 xlimits=(0, 385))
+    # # dbl_plot = plot(u_map, v_map, layout = (2, 1))
+    # # png(dbl_plot, "../../tests/gpu_tests/output_20241021T0933.png")
 
 end
 
@@ -123,35 +123,36 @@ function multipassx(A::T, B::T, wins::Vector{Int32}, Dt::Int32,
     datax = zeros(Float32, (data_dim_1, data_dim_2))
     datay = copy(datax)
 
-    for i in 1:total_passes-1
+    # for i in 1:total_passes-1
+        i = 1
         println("Pass ", i, " of ", total_passes)
 
         x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
 
-        datax, datay = localfilt(x, y, datax, datay, sensit)
+    #     datax, datay = localfilt(x, y, datax, datay, sensit)
 
-        datax, datay = linear_naninterp(datax, datay)
-        datax = floor.(datax)
-        datay = floor.(datay)
+    #     datax, datay = linear_naninterp(datax, datay)
+    #     datax = floor.(datax)
+    #     datay = floor.(datay)
 
-        if i != total_passes - 1
-            Y, X, YI, XI = build_grids_2(datax)
-            datax = regular_interp(datax, X, Y, XI, YI)
-            datay = regular_interp(datay, X, Y, XI, YI)
+    #     if i != total_passes - 1
+    #         Y, X, YI, XI = build_grids_2(datax)
+    #         datax = regular_interp(datax, X, Y, XI, YI)
+    #         datay = regular_interp(datay, X, Y, XI, YI)
 
-            datax = make_nan_border(datax)
-            datay = make_nan_border(datay)
+    #         datax = make_nan_border(datax)
+    #         datay = make_nan_border(datay)
 
-            datax, datay = linear_naninterp(datax, datay)
-            datax = round.(datax)
-            datay = round.(datay)
-        end
-    end
+    #         datax, datay = linear_naninterp(datax, datay)
+    #         datax = round.(datax)
+    #         datay = round.(datay)
+    #     end
+    # end
 
-    println("Final Pass")
-    x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end], overlap, datax, datay, Dt)
-
-    return x, y, u, v, SnR, Pkh
+    # println("Final Pass")
+    # x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end], overlap, datax, datay, Dt)
+    return 0, 0, 0, 0, 0, 0
+    # return x, y, u, v, SnR, Pkh
 end
 
 """
@@ -191,8 +192,8 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     sy, sx = size(A)
     xx_dim1 = ceil(Int32, ((size(A, 1) - N) / ((1 - overlap) * N))) + 1
     xx_dim2 = ceil(Int32, ((size(A, 2) - M) / ((1 - overlap) * M))) + 1
-    datax = zeros(eltype(A), (xx_dim1, xx_dim2))
-    datay = zeros(eltype(A), (xx_dim1, xx_dim2))
+    # datax = zeros(eltype(A), (xx_dim1, xx_dim2))
+    # datay = zeros(eltype(A), (xx_dim1, xx_dim2))
     xx = zeros(eltype(A), (xx_dim1, xx_dim2))
     yy = zeros(eltype(A), (xx_dim1, xx_dim2))
     
@@ -219,64 +220,69 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     get_windows!(winds_A, winds_B, A, B, idx, idy, N, overlap, stad1_vec, stad2_vec)
 
     # Call xcorrf2, passing in the FFT plan and normalize result
+    pad_vec_a::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_a) for i in 1:length(winds_A)]
+    pad_vec_b::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_b) for i in 1:length(winds_A)]
     R::Vector{CuArray{Float32}} = []
-    for idx in eachindex(winds_A)
-        corr =  xcorrf2(winds_A[idx], winds_B[idx], P, Pi, pad_matrix_a, pad_matrix_b)
-        normalizer = (N * M * stad1_vec[idx] * stad2_vec[idx])
-        push!(R, corr .* (1 / normalizer))
-    end
 
-    # LEFT OFF HERE! CAN WE PARALLELIZE?
-    # Find position of maximal value of R
-    max_coords = Vector{Tuple{Int32,Int32}}()
-    if size(R, 1) == (N - 1)
-        fast_max!(max_coords, R)
-    else
-        subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3),
-                    Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
-        fast_max!(max_coords, subset)
-        # Adjust for subset positions
-        max_coords = [(i[1] + Int32(0.5 * N + 1), i[2] + Int32(0.5 * M + 1))
-                        for i in max_coords]
-    end
+    # This loop over correlations shaves of 50% of the xcorr time from CPU version
+    # @time for idx in eachindex(winds_A)
+    #     corr =  xcorrf2(winds_A[idx], winds_B[idx], P, Pi, pad_vec_a[idx], pad_vec_b[idx])
+    #     normalizer = (N * M * stad1_vec[idx] * stad2_vec[idx])
+    #     push!(R, corr .* (1 / normalizer))
+    # end
 
-    # Handle a vector that has multiple maximum coordinates.
-    # Sum the product of each x and y indice with its own indice within
-    # the max_coords vector.
-    if length(max_coords) >= 1
-        if length(max_coords) == 1
-            max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
-        else
-            max_x1 = round(
-                Int32, 
-                sum([c[2] * i for (i, c) in enumerate(max_coords)]) /
-                    sum([c[2] for c in max_coords])
-                    )
-            max_y1 = round(
-                Int32, 
-                sum([c[1] * i for (i, c) in enumerate(max_coords)]) /
-                    sum([c[1] for c in max_coords])
-                    )
-        end
-        # Store displacements in variables datax/datay
-        datax[cj, ci] -= (max_x1 - M) + idx[cj, ci]
-        datay[cj, ci] -= (max_y1 - M) + idy[cj, ci]
-        xx[cj, ci] = ii + M / 2
-        yy[cj, ci] = ii + N / 2
+    # # LEFT OFF HERE! CAN WE PARALLELIZE?
+    # # Find position of maximal value of R
+    # max_coords = Vector{Tuple{Int32,Int32}}()
+    # if size(R, 1) == (N - 1)
+    #     fast_max!(max_coords, R)
+    # else
+    #     subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3),
+    #                 Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
+    #     fast_max!(max_coords, subset)
+    #     # Adjust for subset positions
+    #     max_coords = [(i[1] + Int32(0.5 * N + 1), i[2] + Int32(0.5 * M + 1))
+    #                     for i in max_coords]
+    # end
 
-    # Empty max_coords vector
-    else
-        idx[cj, ci] = 0
-        idy[cj, ci] = 0
-        max_x1 = NaN
-        max_y1 = NaN
+    # # Handle a vector that has multiple maximum coordinates.
+    # # Sum the product of each x and y indice with its own indice within
+    # # the max_coords vector.
+    # if length(max_coords) >= 1
+    #     if length(max_coords) == 1
+    #         max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
+    #     else
+    #         max_x1 = round(
+    #             Int32, 
+    #             sum([c[2] * i for (i, c) in enumerate(max_coords)]) /
+    #                 sum([c[2] for c in max_coords])
+    #                 )
+    #         max_y1 = round(
+    #             Int32, 
+    #             sum([c[1] * i for (i, c) in enumerate(max_coords)]) /
+    #                 sum([c[1] for c in max_coords])
+    #                 )
+    #     end
+    #     # Store displacements in variables datax/datay
+    #     datax[cj, ci] -= (max_x1 - M) + idx[cj, ci]
+    #     datay[cj, ci] -= (max_y1 - M) + idy[cj, ci]
+    #     xx[cj, ci] = ii + M / 2
+    #     yy[cj, ci] = ii + N / 2
 
-        datax[cj, ci] = NaN
-        datay[cj, ci] = NaN
-        xx[cj, ci] = ii + M / 2
-        yy[cj, ci] = ii + N / 2  
-    end
-    return xx, yy, datax, datay
+    # # Empty max_coords vector
+    # else
+    #     idx[cj, ci] = 0
+    #     idy[cj, ci] = 0
+    #     max_x1 = NaN
+    #     max_y1 = NaN
+
+    #     datax[cj, ci] = NaN
+    #     datay[cj, ci] = NaN
+    #     xx[cj, ci] = ii + M / 2
+    #     yy[cj, ci] = ii + N / 2  
+    # end
+    # Should just change idx and idy so not to allocate datax, datay
+    return xx, yy, idx, idy
 end
 
 """
@@ -638,16 +644,11 @@ function xcorrf2(A::T, B::T, plan, iplan, pad_matrix_a::CuArray{ComplexF32},
     pad_matrix_a[1:size(A, 1), 1:size(A, 2)] .= A
     pad_matrix_b[1:size(B, 1), 1:size(B, 2)] .= B
 
-    fft = (plan * pad_matrix_b) .* (plan * pad_matrix_b)
-    ifft = iplan * fft
-    return real(ifft[1:ma+mb-1, 1:na+nb-1])
-
     # Performs FFTs, inverse FFT, then trim the result
     # I did it this weird way to avoid four array allocations
-    # return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
-    # )[1:ma+mb-1, 1:na+nb-1]
+    return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
+    )[1:ma+mb-1, 1:na+nb-1]
 end
-
 
 # FILTERS and Interpolations
 """
