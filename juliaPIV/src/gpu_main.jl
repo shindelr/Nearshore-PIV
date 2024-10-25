@@ -37,8 +37,8 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     # Convert the images to matrices of floats
     A = convert(Matrix{Float32}, image_pair[1])
     B = convert(Matrix{Float32}, image_pair[2])
-    # A_cu = CuArray(A)
-    # B_cu = CuArray(B)
+    A_cu = CuArray(A)
+    B_cu = CuArray(B)
 
     pivwin = 16
     log2pivwin::Int32 = log2(pivwin)
@@ -54,7 +54,7 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     overlap::Float32 = ol
     validvec::Int32 = 3
     # x, y, u, v, SnR, Pkh = multipassx(A_cu, B_cu, pass_sizes, dt, overlap, validvec)
-    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
+    x, y, u, v, SnR, Pkh = multipassx(A_cu, B_cu, pass_sizes, dt, overlap, validvec)
 
     # # Reject data with too-low signal-to-noise level
     # snrthresh::Float32 = 1.3
@@ -213,16 +213,22 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     idy = Array(idy_cu)
 
     # Normalize against the mean and take all standard devs and get all windows
-    winds_A::Vector{CuArray{Float32}} = []
     winds_B::Vector{CuArray{Float32}} = []
+
+    coords = get_wind_coords(N, overlap, Int32(size(A, 1)), Int32(size(A, 2)))
+    winds_A = get_wind_and_norm_im1.(Ref(A), coords, N)
+    
+    # LEFT OFF BUILDING DISPLACEMENT WINDOW BROADCAST FUNCTION FOR WINDS_B
+
     stad1_vec = Vector{Float32}(undef, length(winds_A))
     stad2_vec = Vector{Float32}(undef, length(winds_A))
-    get_windows!(winds_A, winds_B, A, B, idx, idy, N, overlap, stad1_vec, stad2_vec)
+
+    # get_windows!(winds_A, winds_B, A, B, idx, idy, N, overlap, stad1_vec, stad2_vec)
 
     # Call xcorrf2, passing in the FFT plan and normalize result
-    pad_vec_a::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_a) for i in 1:length(winds_A)]
-    pad_vec_b::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_b) for i in 1:length(winds_A)]
-    R::Vector{CuArray{Float32}} = []
+    # pad_vec_a::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_a) for i in 1:length(winds_A)]
+    # pad_vec_b::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_b) for i in 1:length(winds_A)]
+    # R::Vector{CuArray{Float32}} = []
 
     # This loop over correlations shaves of 50% of the xcorr time from CPU version
     # @time for idx in eachindex(winds_A)
@@ -231,7 +237,6 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     #     push!(R, corr .* (1 / normalizer))
     # end
 
-    # # LEFT OFF HERE! CAN WE PARALLELIZE?
     # # Find position of maximal value of R
     # max_coords = Vector{Tuple{Int32,Int32}}()
     # if size(R, 1) == (N - 1)
@@ -560,6 +565,32 @@ function get_windows!(winds_im1::Vector{CuArray{Float32}},
        end
 end
 
+function get_wind_coords(win_size::Int32, ol::Float32,
+                            M::Int32, N::Int32)
+    coords =  [(Int32(i), Int32(j)) 
+                for i in 1:(1 - ol) * win_size:M - win_size + 1, 
+                    j in 1:(1 - ol) * win_size:N - win_size + 1
+            ]
+    return coords
+end
+
+function mean_normalize(cu_arr::CuArray{Float32})
+    m = mean(cu_arr)
+    return cu_arr .- m
+end
+
+function get_wind_and_norm_im1(image::CuArray{Float32}, coord::Tuple{Int32, Int32}, win_size::Int32)
+    i, j = coord
+    window = cu(image[i: Int32(i + win_size - 1), j: Int32(j + win_size - 1)])
+    return mean_normalize(window)
+end
+
+# function get_wind_and_norm_im2(image::CuArray{Float32}, coord::Tuple{Int32}, 
+#                                 win_size::Int32, idx::T, idy::T) where {T}
+#     i,j = coord
+#     window = 
+# end
+
 function set_nan_zero_kernel!(idx::CuDeviceMatrix{Float32}, idy::CuDeviceMatrix{Float32})
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
@@ -595,8 +626,8 @@ end
     ----------
         A padded matrix of zeros up to the next power of 2 of the window size.
 """
-function pad_for_xcorr(trunc_matrix::Matrix{Float32})
-# function pad_for_xcorr(trunc_matrix::CuArray{Float32})
+# function pad_for_xcorr(trunc_matrix::Matrix{Float32})
+function pad_for_xcorr(trunc_matrix::CuArray{Float32})
     ma, na = size(trunc_matrix)
     mf = nextpow(2, ma + na)
     return zeros(ComplexF32, mf, mf)
