@@ -203,37 +203,44 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     copyto!(idx_cu, idx)
     copyto!(idy_cu, idy)
 
-    # Run kernel
-    num_blocks = ceil(Int, size(idx, 1)/256)
-    CUDA.@sync begin
-        @cuda threads=256 blocks=num_blocks set_nan_zero_kernel!(idx_cu, idy_cu)
+    # Kernel to set every value of idx/y that is NaN to 0 if any are NaN
+    if any(isnan.(idx_cu)) || any(isnan.(idy_cu))
+        num_blocks = ceil(Int, size(idx, 1)/256)
+        CUDA.@sync begin
+            @cuda threads=256 blocks=num_blocks set_nan_zero_kernel!(idx_cu, idy_cu)
+        end
     end
-    # Copy down from GPU
-    idx = Array(idx_cu)
-    idy = Array(idy_cu)
 
     # Normalize against the mean and take all standard devs and get all windows
-    winds_B::Vector{CuArray{Float32}} = []
-
-    coords = get_wind_coords(N, overlap, Int32(size(A, 1)), Int32(size(A, 2)))
-    winds_A = get_wind_and_norm_im1.(Ref(A), coords, N)
+    AM, AN = Int32.(size(A))
+    coords::Matrix{Tuple{Int32, Int32}} = get_wind_coords(N, overlap, AM, AN)
+    winds_A = get_wind_and_norm_im.(Ref(A), coords, N)
     
-    # LEFT OFF BUILDING DISPLACEMENT WINDOW BROADCAST FUNCTION FOR WINDS_B
+    # Make a quick grid for the ci and cj values
+    ci_cj_grid::Matrix{Tuple{Int32, Int32}} = [(ci, cj) 
+                                                for ci in 1:size(idx, 1)-1, 
+                                                    cj in 1:size(idx, 2)-1]
 
-    stad1_vec = Vector{Float32}(undef, length(winds_A))
-    stad2_vec = Vector{Float32}(undef, length(winds_A))
+    coords_B = adjust_wind_coords!.(Ref(N), Ref(overlap), Ref(AM), Ref(AN), 
+                                    coords, ci_cj_grid, Ref(idx), Ref(idy))
+    winds_B = get_wind_and_norm_im.(Ref(B), coords_B, M)
 
-    # get_windows!(winds_A, winds_B, A, B, idx, idy, N, overlap, stad1_vec, stad2_vec)
+    # Get standard deviations
+    # LEFT OFF HERE!! SOME KIND OF BOTTLENECK
+    # stad1_M = CuArray{Float32}(undef, size(winds_A))
+    # stad2_M = CuArray{Float32}(undef, size(winds_B))
+    # stad1_M = gpu_fast_std.(winds_A)
+    # stad2_M = gpu_fast_std.(winds_B)
 
     # Call xcorrf2, passing in the FFT plan and normalize result
     # pad_vec_a::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_a) for i in 1:length(winds_A)]
     # pad_vec_b::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_b) for i in 1:length(winds_A)]
     # R::Vector{CuArray{Float32}} = []
 
-    # This loop over correlations shaves of 50% of the xcorr time from CPU version
-    # @time for idx in eachindex(winds_A)
+    # # This loop over correlations shaves of 50% of the xcorr time from CPU version
+    # for idx in eachindex(winds_A)
     #     corr =  xcorrf2(winds_A[idx], winds_B[idx], P, Pi, pad_vec_a[idx], pad_vec_b[idx])
-    #     normalizer = (N * M * stad1_vec[idx] * stad2_vec[idx])
+    #     normalizer = (N * M * stad1_M[idx] * stad2_M[idx])
     #     push!(R, corr .* (1 / normalizer))
     # end
 
@@ -502,17 +509,9 @@ function finalpass(A::Matrix{T}, B::Matrix{T}, N::Int32, ol::Float32,
     return xp, yp, up, vp, SnR, Pkh
 end
 
-function gpu_mean_and_std!(winds_A::T, winds_B::T, stds_A::F, stds_B::F) where {T, F}
-    
-    for i in eachindex(winds_A)
-        winds_A[i] .= winds_A[i] .- mean(winds_A[i]) 
-        winds_B[i] .= winds_A[i] .- mean(winds_B[i]) 
-
-        stds_A[i] = gpu_fast_std(winds_A[i])
-        stds_B[i] = gpu_fast_std(winds_B[i])
-    end
-end
-
+"""
+TODO: doc
+"""
 function gpu_fast_std(collection::CuArray{Float32})
     mu = mean(collection)
     deviation = collection .- mu
@@ -521,77 +520,68 @@ function gpu_fast_std(collection::CuArray{Float32})
     return ifelse(std == 0, NaN, std)
 end
 
-function get_windows!(winds_im1::Vector{CuArray{Float32}}, 
-                    winds_im2::Vector{CuArray{Float32}}, 
-                    im1::T, im2::T, displace_x::T, displace_y::T, 
-                    win_size::Int32, ol::Float32, stad1_vec::Vector{Float32}, 
-                    stad2_vec::Vector{Float32}) where {T}
-
-    M, N = size(im1)
-    ci = 1
-       for i in 1:(1 - ol) * win_size:M - win_size + 1
-        cj = 1
-           for j in 1:(1 - ol) * win_size:N - win_size + 1
-                i = Int32(i)
-                j = Int32(j)
-
-                # Calculate some displacement thing
-                if (i + displace_x[ci, cj]) < 1
-                    displace_x[ci, cj] = 1 - i
-                elseif (i + displace_x[ci, cj]) > (M - win_size + 1)
-                    displace_x[ci, cj] = M - win_size + 1 - i
-                end                
-                
-                if (j + displace_y[ci, cj]) < 1
-                    displace_y[ci, cj] = 1 - j
-                elseif (j + displace_y[ci, cj]) > (N - win_size + 1)
-                    displace_y[ci, cj] = N - win_size + 1 - j
-                end
-
-                # Push windows of image 1 normalized against the mean
-                window = cu(im1[i: Int32(i + win_size - 1), j: Int32(j + win_size - 1)])
-                push!(winds_im1, window .- mean(window))
-                push!(stad1_vec, gpu_fast_std(window))
-
-                # Push windows of image 2 with displacement data normalized against the mean
-                window = cu(im2[Int32(i + displace_x[ci, cj]):Int32(i + win_size - 1 + displace_x[ci, cj]),
-                                Int32(j + displace_y[ci, cj]):Int32(j + win_size - 1 + displace_y[ci, cj])])
-                push!(winds_im2, window .- mean(window))
-                push!(stad2_vec, gpu_fast_std(window))
-
-                cj += 1
-           end
-           ci += 1
-       end
-end
-
+"""
+TODO: doc
+"""
 function get_wind_coords(win_size::Int32, ol::Float32,
                             M::Int32, N::Int32)
-    coords =  [(Int32(i), Int32(j)) 
+    coords = [(Int32(i), Int32(j)) 
                 for i in 1:(1 - ol) * win_size:M - win_size + 1, 
-                    j in 1:(1 - ol) * win_size:N - win_size + 1
-            ]
+                    j in 1:(1 - ol) * win_size:N - win_size + 1]
     return coords
 end
 
+"""
+TODO: doc
+"""
+function adjust_wind_coords!(win_size::F, ol::Float32, M::F, N::F, 
+                            coord::Tuple{Int32, Int32}, 
+                            disp_coord::Tuple{Int32, Int32},
+                            displace_x::T, displace_y::T) where {F, T}
+
+    i, j = coord
+    ci, cj = disp_coord
+    dx, dy = displace_x[ci, cj], displace_y[ci, cj]
+
+    if (i + dx) < 1
+        displace_x[ci, cj] = 1 - i
+    elseif (i + dx) > (M - win_size + 1)
+        displace_x[ci, cj] = M - win_size + 1 - i
+    end                
+
+    if (j + dy) < 1
+        displace_y[ci, cj] = 1 - j
+    elseif (j + dy) > (N - win_size + 1)
+        displace_y[ci, cj] = N - win_size + 1 - j
+    end
+
+    return Int32(i + displace_x[ci, cj]), Int32(j + displace_y[ci, cj])
+end
+
+"""
+TODO: doc
+"""
 function mean_normalize(cu_arr::CuArray{Float32})
     m = mean(cu_arr)
     return cu_arr .- m
 end
 
-function get_wind_and_norm_im1(image::CuArray{Float32}, coord::Tuple{Int32, Int32}, win_size::Int32)
+"""
+TODO: doc
+"""
+function get_wind_and_norm_im(image::CuArray{Float32}, 
+                                coord::Tuple{Int32, Int32}, 
+                                win_size::Int32)
     i, j = coord
     window = cu(image[i: Int32(i + win_size - 1), j: Int32(j + win_size - 1)])
     return mean_normalize(window)
 end
 
-# function get_wind_and_norm_im2(image::CuArray{Float32}, coord::Tuple{Int32}, 
-#                                 win_size::Int32, idx::T, idy::T) where {T}
-#     i,j = coord
-#     window = 
-# end
-
-function set_nan_zero_kernel!(idx::CuDeviceMatrix{Float32}, idy::CuDeviceMatrix{Float32})
+"""
+TODO: doc
+"""
+function set_nan_zero_kernel!(idx::CuDeviceMatrix{Float32}, 
+                                idy::CuDeviceMatrix{Float32})
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
     j = (blockIdx().y - 1) * blockDim().y + threadIdx().y
 
