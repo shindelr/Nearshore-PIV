@@ -183,8 +183,6 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     # Set up for FFT plans
     pad_matrix_a = cu(pad_for_xcorr(A[1:M, 1:N]))
     pad_matrix_b = cu(pad_for_xcorr(B[1:M, 1:N]))
-    # P = plan_fft(pad_matrix_a; flags=FFTW.ESTIMATE)
-    # Pi = plan_ifft(pad_matrix_a; flags=FFTW.ESTIMATE)
     P = CUDA.CUFFT.plan_fft(pad_matrix_a)
     Pi = CUDA.CUFFT.plan_ifft(pad_matrix_a)
 
@@ -192,8 +190,6 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     sy, sx = size(A)
     xx_dim1 = ceil(Int32, ((size(A, 1) - N) / ((1 - overlap) * N))) + 1
     xx_dim2 = ceil(Int32, ((size(A, 2) - M) / ((1 - overlap) * M))) + 1
-    # datax = zeros(eltype(A), (xx_dim1, xx_dim2))
-    # datay = zeros(eltype(A), (xx_dim1, xx_dim2))
     xx = zeros(eltype(A), (xx_dim1, xx_dim2))
     yy = zeros(eltype(A), (xx_dim1, xx_dim2))
     
@@ -214,35 +210,24 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     # Normalize against the mean and take all standard devs and get all windows
     AM, AN = Int32.(size(A))
     coords::Matrix{Tuple{Int32, Int32}} = get_wind_coords(N, overlap, AM, AN)
-    winds_A = get_wind_and_norm_im.(Ref(A), coords, N)
+    winds_A = get_wind_norm.(Ref(A), coords, Ref(N))
     
     # Make a quick grid for the ci and cj values
-    ci_cj_grid::Matrix{Tuple{Int32, Int32}} = [(ci, cj) 
-                                                for ci in 1:size(idx, 1)-1, 
-                                                    cj in 1:size(idx, 2)-1]
-
+    ci_cj_grid::Matrix{Tuple{Int32, Int32}} = [(ci, cj) for ci in 1:size(idx, 1)-1, 
+                                                            cj in 1:size(idx, 2)-1]
     coords_B = adjust_wind_coords!.(Ref(N), Ref(overlap), Ref(AM), Ref(AN), 
                                     coords, ci_cj_grid, Ref(idx), Ref(idy))
-    winds_B = get_wind_and_norm_im.(Ref(B), coords_B, M)
+    winds_B = get_wind_norm.(Ref(B), coords_B, Ref(M))
 
-    # Get standard deviations
-    # LEFT OFF HERE!! SOME KIND OF BOTTLENECK
-    # stad1_M = CuArray{Float32}(undef, size(winds_A))
-    # stad2_M = CuArray{Float32}(undef, size(winds_B))
-    # stad1_M = gpu_fast_std.(winds_A)
-    # stad2_M = gpu_fast_std.(winds_B)
+    # Calculate correlation normalizers
+    corr_normalizers = Vector{Float32}(undef, size(winds_A, 1))
+    MN = M * N
+    for i in 1:size(winds_A, 1)
+        corr_normalizers[i] = MN * std(winds_A[i]) * std(winds_B[i])
+    end
 
     # Call xcorrf2, passing in the FFT plan and normalize result
-    # pad_vec_a::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_a) for i in 1:length(winds_A)]
-    # pad_vec_b::Vector{CuArray{ComplexF32}} = [copy(pad_matrix_b) for i in 1:length(winds_A)]
-    # R::Vector{CuArray{Float32}} = []
-
-    # # This loop over correlations shaves of 50% of the xcorr time from CPU version
-    # for idx in eachindex(winds_A)
-    #     corr =  xcorrf2(winds_A[idx], winds_B[idx], P, Pi, pad_vec_a[idx], pad_vec_b[idx])
-    #     normalizer = (N * M * stad1_M[idx] * stad2_M[idx])
-    #     push!(R, corr .* (1 / normalizer))
-    # end
+    R = xcorrf2.(winds_A, winds_B, Ref(P), Ref(Pi)) .* corr_normalizers
 
     # # Find position of maximal value of R
     # max_coords = Vector{Tuple{Int32,Int32}}()
@@ -512,17 +497,6 @@ end
 """
 TODO: doc
 """
-function gpu_fast_std(collection::CuArray{Float32})
-    mu = mean(collection)
-    deviation = collection .- mu
-    std = sqrt(mean(deviation .^ 2))
-    # Return NaN if 0 otherwise, return the standard deviation
-    return ifelse(std == 0, NaN, std)
-end
-
-"""
-TODO: doc
-"""
 function get_wind_coords(win_size::Int32, ol::Float32,
                             M::Int32, N::Int32)
     coords = [(Int32(i), Int32(j)) 
@@ -561,20 +535,19 @@ end
 """
 TODO: doc
 """
-function mean_normalize(cu_arr::CuArray{Float32})
-    m = mean(cu_arr)
-    return cu_arr .- m
+function get_wind_norm(image::CuArray{Float32}, 
+                                coord::Tuple{Int32, Int32}, 
+                                win_size::Int32)
+    i, j = coord
+    return mean_normalize(cu(image[i: Int32(i + win_size - 1), j: Int32(j + win_size - 1)]))
 end
 
 """
 TODO: doc
 """
-function get_wind_and_norm_im(image::CuArray{Float32}, 
-                                coord::Tuple{Int32, Int32}, 
-                                win_size::Int32)
-    i, j = coord
-    window = cu(image[i: Int32(i + win_size - 1), j: Int32(j + win_size - 1)])
-    return mean_normalize(window)
+function mean_normalize(cu_arr::CuArray{Float32})
+    m = mean(cu_arr)
+    return cu_arr .- m
 end
 
 """
@@ -647,14 +620,15 @@ end
     Author(s): R. Johnson
     Revision: 1.0   Date: 1995/11/27
 """
-# function xcorrf2(A::Matrix{Float32}, B::Matrix{Float32}, plan, iplan,
-#     pad_matrix_a::Matrix{ComplexF32}, pad_matrix_b::Matrix{ComplexF32})
-function xcorrf2(A::T, B::T, plan, iplan, pad_matrix_a::CuArray{ComplexF32},
-                pad_matrix_b::CuArray{ComplexF32}) where {T}
+function xcorrf2(A::T, B::T, plan, iplan) where {T}
 
     # Unpack size() return tuple into appropriate variables
     ma, na = size(A)
     mb, nb = size(B)
+
+    mf = nextpow(2, ma + na)
+    pad_matrix_a = CUDA.zeros(ComplexF32, mf, mf)
+    pad_matrix_b = CUDA.zeros(ComplexF32, mf, mf)
 
     # Reverse conjugate
     B = conj.(B[mb:-1:1, nb:-1:1])
