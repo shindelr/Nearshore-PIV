@@ -37,8 +37,8 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     # Convert the images to matrices of floats
     A = convert(Matrix{Float32}, image_pair[1])
     B = convert(Matrix{Float32}, image_pair[2])
-    A_cu = CuArray(A)
-    B_cu = CuArray(B)
+    # A_cu = CuArray(A)
+    # B_cu = CuArray(B)
 
     pivwin = 16
     log2pivwin::Int32 = log2(pivwin)
@@ -53,8 +53,8 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     dt::Int32 = 1
     overlap::Float32 = ol
     validvec::Int32 = 3
+    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
     # x, y, u, v, SnR, Pkh = multipassx(A_cu, B_cu, pass_sizes, dt, overlap, validvec)
-    x, y, u, v, SnR, Pkh = multipassx(A_cu, B_cu, pass_sizes, dt, overlap, validvec)
 
     # # Reject data with too-low signal-to-noise level
     # snrthresh::Float32 = 1.3
@@ -207,27 +207,43 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
         end
     end
 
-    # Normalize against the mean and take all standard devs and get all windows
-    AM, AN = Int32.(size(A))
-    coords::Matrix{Tuple{Int32, Int32}} = get_wind_coords(N, overlap, AM, AN)
-    winds_A = get_wind_norm.(Ref(A), coords, Ref(N))
-    
-    # Make a quick grid for the ci and cj values
-    ci_cj_grid::Matrix{Tuple{Int32, Int32}} = [(ci, cj) for ci in 1:size(idx, 1)-1, 
-                                                            cj in 1:size(idx, 2)-1]
-    coords_B = adjust_wind_coords!.(Ref(N), Ref(overlap), Ref(AM), Ref(AN), 
-                                    coords, ci_cj_grid, Ref(idx), Ref(idy))
-    winds_B = get_wind_norm.(Ref(B), coords_B, Ref(M))
+    num_windows = length(1:((1-overlap)*N):(sy-N+1)) * length(1:((1-overlap)*M):(sx-M+1))
+    winds_A = Vector{CuArray{Float32}}(undef, num_windows)
+    winds_B = Vector{CuArray{Float32}}(undef, num_windows)
+    cj = 1
+    k = 1
+    for jj in 1:((1-overlap)*N):(sy-N+1)
+        ci = 1
+        for ii in 1:((1-overlap)*M):(sx-M+1)
 
-    # Calculate correlation normalizers
-    corr_normalizers = Vector{Float32}(undef, size(winds_A, 1))
-    MN = M * N
-    for i in 1:size(winds_A, 1)
-        corr_normalizers[i] = MN * std(winds_A[i]) * std(winds_B[i])
+            if (jj + idy[cj, ci]) < 1
+                idy[cj, ci] = 1 - jj
+            elseif (jj + idy[cj, ci]) > (sy - N + 1)
+                idy[cj, ci] = sy - N + 1 - jj
+            end
+
+            if (ii + idx[cj, ci]) < 1
+                idx[cj, ci] = 1 - ii
+            elseif (ii + idx[cj, ci]) > (sx - M + 1)
+                idx[cj, ci] = sx - M + 1 - ii
+            end
+
+            C = @view A[floor(Int32, jj):floor(Int32, jj + N - 1), floor(Int32, ii):floor(Int32, ii + M - 1)]
+            D = @view B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
+                floor(Int32, ii + idx[cj, ci]):floor(Int32, ii + M - 1 + idx[cj, ci])]
+            
+            winds_A[k] = (C .- mean(C))
+            winds_B[k] = (D .- mean(D))
+
+            ci += 1
+            k += 1
+        end
+        cj += 1
     end
 
-    # Call xcorrf2, passing in the FFT plan and normalize result
-    R = xcorrf2.(winds_A, winds_B, Ref(P), Ref(Pi)) .* corr_normalizers
+    # Or call it and skip normalizing, apparently not needed
+    R = xcorrf2.(winds_A, winds_B, Ref(P), Ref(Pi))
+
 
     # # Find position of maximal value of R
     # max_coords = Vector{Tuple{Int32,Int32}}()
@@ -589,8 +605,8 @@ end
     ----------
         A padded matrix of zeros up to the next power of 2 of the window size.
 """
-# function pad_for_xcorr(trunc_matrix::Matrix{Float32})
-function pad_for_xcorr(trunc_matrix::CuArray{Float32})
+function pad_for_xcorr(trunc_matrix::Matrix{Float32})
+# function pad_for_xcorr(trunc_matrix::CuArray{Float32})
     ma, na = size(trunc_matrix)
     mf = nextpow(2, ma + na)
     return zeros(ComplexF32, mf, mf)
