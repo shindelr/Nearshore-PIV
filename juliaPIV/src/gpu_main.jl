@@ -12,6 +12,9 @@ using Plots
 using Luxor            # For creating inpolygon() functionality
 using CUDA
 using StaticArrays     # Helpful for array allocations in kernels
+using CellArrays
+
+@define_CuCellArray
 
 
 # MAIN
@@ -53,8 +56,10 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     dt::Int32 = 1
     overlap::Float32 = ol
     validvec::Int32 = 3
-    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
-    # x, y, u, v, SnR, Pkh = multipassx(A_cu, B_cu, pass_sizes, dt, overlap, validvec)
+
+    # x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
+    u, v = multipassx(A, B, pass_sizes, dt, overlap, validvec)
+    # u, v, SnR, Pkh = multipassx(A_cu, B_cu, pass_sizes, dt, overlap, validvec)
 
     # # Reject data with too-low signal-to-noise level
     # snrthresh::Float32 = 1.3
@@ -69,23 +74,23 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     # # Reject data that disagree strongly with their neighbors in a local window
     # u, v = globfilt(u, v)
 
-    # # return ((x, y), (u, v), pass_sizes)
-    # # return
+    # return ((x, y), (u, v), pass_sizes)
+    return u, v
 
-    # # Plotting stuff
-    # # u_map = heatmap(u, 
-    # #                 title = "u [pixels/frame]", 
-    # #                 aspect_ratio = :equal, 
-    # #                 limits=(0, 200), 
-    # #                 xlimits=(0, 385))
+    # Plotting stuff
+    # u_map = heatmap(u, 
+    #                 title = "u [pixels/frame]", 
+    #                 aspect_ratio = :equal, 
+    #                 limits=(0, 200), 
+    #                 xlimits=(0, 385))
 
-    # # v_map = heatmap(v, 
-    # #                 title = "v [pixels/frame]", 
-    # #                 aspect_ratio = :equal, 
-    # #                 ylimits=(0, 200), 
-    # #                 xlimits=(0, 385))
-    # # dbl_plot = plot(u_map, v_map, layout = (2, 1))
-    # # png(dbl_plot, "../../tests/gpu_tests/output_20241021T0933.png")
+    # v_map = heatmap(v, 
+    #                 title = "v [pixels/frame]", 
+    #                 aspect_ratio = :equal, 
+    #                 ylimits=(0, 200), 
+    #                 xlimits=(0, 385))
+    # dbl_plot = plot(u_map, v_map, layout = (2, 1))
+    # png(dbl_plot, "../../tests/gpu_tests/output_20241021T0933.png")
 
 end
 
@@ -123,35 +128,36 @@ function multipassx(A::T, B::T, wins::Vector{Int32}, Dt::Int32,
     datax = zeros(Float32, (data_dim_1, data_dim_2))
     datay = copy(datax)
 
-    # for i in 1:total_passes-1
-        i = 1
+    for i in 1:total_passes-1
+        # i = 1
         println("Pass ", i, " of ", total_passes)
 
         x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
 
-    #     datax, datay = localfilt(x, y, datax, datay, sensit)
+        datax, datay = localfilt(x, y, datax, datay, sensit)
 
-    #     datax, datay = linear_naninterp(datax, datay)
-    #     datax = floor.(datax)
-    #     datay = floor.(datay)
+        datax, datay = linear_naninterp(datax, datay)
+        datax = floor.(datax)
+        datay = floor.(datay)
 
-    #     if i != total_passes - 1
-    #         Y, X, YI, XI = build_grids_2(datax)
-    #         datax = regular_interp(datax, X, Y, XI, YI)
-    #         datay = regular_interp(datay, X, Y, XI, YI)
+        if i != total_passes - 1
+            Y, X, YI, XI = build_grids_2(datax)
+            datax = regular_interp(datax, X, Y, XI, YI)
+            datay = regular_interp(datay, X, Y, XI, YI)
 
-    #         datax = make_nan_border(datax)
-    #         datay = make_nan_border(datay)
+            datax = make_nan_border(datax)
+            datay = make_nan_border(datay)
 
-    #         datax, datay = linear_naninterp(datax, datay)
-    #         datax = round.(datax)
-    #         datay = round.(datay)
-    #     end
-    # end
+            datax, datay = linear_naninterp(datax, datay)
+            datax = round.(datax)
+            datay = round.(datay)
+        end
+    end
 
     # println("Final Pass")
     # x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end], overlap, datax, datay, Dt)
-    return 0, 0, 0, 0, 0, 0
+    # return 0, 0, 0, 0, 0, 0
+    return datax, datay
     # return x, y, u, v, SnR, Pkh
 end
 
@@ -192,6 +198,12 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     xx_dim2 = ceil(Int32, ((size(A, 2) - M) / ((1 - overlap) * M))) + 1
     xx = zeros(eltype(A), (xx_dim1, xx_dim2))
     yy = zeros(eltype(A), (xx_dim1, xx_dim2))
+
+    # New displacement matrices
+    data_dim_1::Int32 = round(Int32, sy / (N * (1 - overlap)))
+    data_dim_2::Int32 = round(Int32, sx / (N * (1 - overlap)))
+    datax = zeros(Float32, (data_dim_1, data_dim_2))
+    datay = copy(datax)
     
     # Allocate idx/y GPU
     idx_cu = CuArray{Float32}(undef, size(idx))
@@ -208,14 +220,23 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     end
 
     num_windows = length(1:((1-overlap)*N):(sy-N+1)) * length(1:((1-overlap)*M):(sx-M+1))
-    winds_A = Vector{CuArray{Float32}}(undef, num_windows)
-    winds_B = Vector{CuArray{Float32}}(undef, num_windows)
+    cell_dims = (Int(N), Int(M))
+    nx = length(1:((1-overlap)*N):(sy-N+1))
+    ny = length(1:((1-overlap)*M):(sx-M+1))
+    nz = num_windows
+    cell = SMatrix{cell_dims..., Float32, prod(cell_dims)}
+    winds_A = CuCellArray{cell}(undef, nx, ny, nz)
+    winds_B = CuCellArray{cell}(undef, nx, ny, nz)
+
+
     cj = 1
     k = 1
-    for jj in 1:((1-overlap)*N):(sy-N+1)
+    for jj in 1:((1-overlap)*N):(sy-N+1)  # Iterate in steps of half a window size
         ci = 1
         for ii in 1:((1-overlap)*M):(sx-M+1)
 
+            # idx/y are matrices containing pixel displacement data in x/y directions
+            # Adjust displacement coordinates for index bounding
             if (jj + idy[cj, ci]) < 1
                 idy[cj, ci] = 1 - jj
             elseif (jj + idy[cj, ci]) > (sy - N + 1)
@@ -228,12 +249,19 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
                 idx[cj, ci] = sx - M + 1 - ii
             end
 
-            C = @view A[floor(Int32, jj):floor(Int32, jj + N - 1), floor(Int32, ii):floor(Int32, ii + M - 1)]
-            D = @view B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
-                floor(Int32, ii + idx[cj, ci]):floor(Int32, ii + M - 1 + idx[cj, ci])]
+            # Extract each window from Image A and Image B
+            C = cu(A[floor(Int32, jj):floor(Int32, jj + N - 1), 
+                 floor(Int32, ii):floor(Int32, ii + M - 1)])
+            D = cu(B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
+                 floor(Int32, ii + idx[cj, ci]):floor(Int32, ii + M - 1 + idx[cj, ci])])
             
+            # Normalize each window against its mean
             winds_A[k] = (C .- mean(C))
             winds_B[k] = (D .- mean(D))
+
+            # This bit isn't consequential at the moment
+            xx[cj, ci] = ii + M / 2
+            yy[cj, ci] = ii + N / 2            
 
             ci += 1
             k += 1
@@ -241,14 +269,35 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
         cj += 1
     end
 
-    # Or call it and skip normalizing, apparently not needed
-    R = xcorrf2.(winds_A, winds_B, Ref(P), Ref(Pi))
+    # # Cross correlate on the GPU!
+    # @time R = xcorrf2.(winds_A, winds_B, Ref(P), Ref(Pi))
+    
+    # # Find position and value of maximal value of each window in R
+    # max_coords = argmax.(R)
 
+    # # This first branch probably shouldn't happen
+    # if length(max_coords) == 0
+    #     idx .= NaN
+    #     idy .= NaN
+    # # Much more likely:
+    # else
+    #     cj = 1
+    #     k = 1
+    #     for jj in 1:((1-overlap)*N):(sy-N+1)
+    #         ci = 1
+    #         for ii in 1:((1-overlap)*M):(sx-M+1)
+    #             datax[cj, ci] -= max_coords[k][1] + idx[cj, ci]
+    #             datay[cj, ci] -= max_coords[k][2] + idy[cj, ci]
+    #             ci += 1
+    #             k += 1
+    #     end
+    #         cj += 1
+    #     end
+    # end
 
-    # # Find position of maximal value of R
     # max_coords = Vector{Tuple{Int32,Int32}}()
     # if size(R, 1) == (N - 1)
-    #     fast_max!(max_coords, R)
+        # fast_max!(max_coords, R)
     # else
     #     subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3),
     #                 Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
@@ -295,7 +344,7 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     #     yy[cj, ci] = ii + N / 2  
     # end
     # Should just change idx and idy so not to allocate datax, datay
-    return xx, yy, idx, idy
+    return xx, yy, datax, datay
 end
 
 """
@@ -637,7 +686,6 @@ end
     Revision: 1.0   Date: 1995/11/27
 """
 function xcorrf2(A::T, B::T, plan, iplan) where {T}
-
     # Unpack size() return tuple into appropriate variables
     ma, na = size(A)
     mb, nb = size(B)
@@ -650,13 +698,10 @@ function xcorrf2(A::T, B::T, plan, iplan) where {T}
     B = conj.(B[mb:-1:1, nb:-1:1])
 
     # Transfer data from og matrix to optimized sized ones
-    # pad_matrix_a[1:size(A, 1), 1:size(A, 2)] = A[1:size(A, 1), 1:size(A, 2)]
-    # pad_matrix_b[1:size(B, 1), 1:size(B, 2)] = B[1:size(B, 1), 1:size(B, 2)]
     pad_matrix_a[1:size(A, 1), 1:size(A, 2)] .= A
     pad_matrix_b[1:size(B, 1), 1:size(B, 2)] .= B
 
     # Performs FFTs, inverse FFT, then trim the result
-    # I did it this weird way to avoid four array allocations
     return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
     )[1:ma+mb-1, 1:na+nb-1]
 end
@@ -1031,74 +1076,80 @@ end
             and v.
 """
 function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32}, 
-                    v::Matrix{Float32}, threshold::Int32, median_bool=true, m=3)
-    dim1 = round(Int32, size(u, 1) + 2 * floor(m / 2))
-    dim2 = round(Int32, size(u, 2) + 2 * floor(m / 2))
-    nu = zeros(eltype(u), (dim1, dim2)) * NaN
-    nv = zeros(eltype(u), (dim1, dim2)) * NaN
+    v::Matrix{Float32}, threshold::Int32, median_bool=true, m=3)
+# IN = zeros(eltype(u), size(u))  # Masking not implemented
+dim1 = round(Int32, size(u, 1) + 2 * floor(m / 2))
+dim2 = round(Int32, size(u, 2) + 2 * floor(m / 2))
+nu = zeros(eltype(u), (dim1, dim2)) * NaN
+nv = zeros(eltype(u), (dim1, dim2)) * NaN
 
-    # Transfer over data
-    from_cols = round(Int32, floor(m / 2) + 1)
-    minus_rows = round(Int32, floor(m / 2))
-    nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
-    nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
+# Transfer over data
+from_cols = round(Int32, floor(m / 2) + 1)
+minus_rows = round(Int32, floor(m / 2))
+nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
+nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
 
-    U2::Matrix{ComplexF32} = nu .+ im .* nv
-    ma, na = size(U2)
-    histostd = zeros(ComplexF32, size(nu))
-    histo = zeros(ComplexF32, size(nu))
-    ma, na = size(U2)
-    m = 3
+# writedlm("../../tests/gpu_tests/nu.csv", nu, ',')
+# writedlm("../../tests/gpu_tests/nv.csv", nv, ',')
 
-    for ii in m-1:1:na-m+2
-        for jj in m-1:1:ma-m+2
-            # Get a 3x3 submatrix of U2
-            m_floor_two = floor(Int32, m / 2)
-            tmp = U2[jj-m_floor_two:jj+m_floor_two,
-                        ii-m_floor_two:ii+m_floor_two]
 
-            # Assign the center value to NaN
-            tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
+# INx = zeros(eltype(nu), size(nu))
+# Masking not implemented
+# INx[from_cols:end-minus_rows, from_cols:end-minus_rows] = IN
 
-            # Run the appropriate stat depending on method arg.
-            histo[jj, ii] = im_median_magnitude(tmp[:])
-            histostd[jj, ii] = im_std(tmp[:])
-        end
-    end
+U2::Matrix{ComplexF32} = nu .+ im .* nv
 
-    # Allocate space to the GPU
-    histo_cu = CuArray{ComplexF32}(undef, size(histo))
-    histostd_cu = CuArray{ComplexF32}(undef, size(histostd))
-    U2_cu = CuArray{ComplexF32}(undef, size(U2))
-    nv_cu = CuArray{Float32}(undef, size(nv))
-    nu_cu = CuArray{Float32}(undef, size(nu))
-    copyto!(nv_cu, nv)
-    copyto!(nu_cu, nu)
-    copyto!(histo_cu, histo)
-    copyto!(histostd_cu, histostd)
-    copyto!(U2_cu, U2)
+ma, na = size(U2)
+histostd = zeros(ComplexF32, size(nu))
+histo = zeros(ComplexF32, size(nu))
 
-    coords = findall(
-        (real(U2_cu) .> real(histo_cu) .+ threshold .* real(histostd_cu)) .|
-        (imag(U2_cu) .> imag(histo_cu) .+ threshold .* imag(histostd_cu)) .|
-        (real(U2_cu) .< real(histo_cu) .- threshold .* real(histostd_cu)) .|
-        (imag(U2_cu) .< imag(histo_cu) .- threshold .* imag(histostd_cu)))
+for ii in m-1:1:na-m+2
+for jj in m-1:1:ma-m+2
 
-    num_blocks = ceil(Int, length(coords)/256)
-    CUDA.@sync begin
-        @cuda threads=256 blocks=num_blocks set_nan_coords_kernel!(coords, nu_cu, nv_cu)
-    end
+# if INx[jj, ii] != 1
+# Get a 3x3 submatrix of U2
+m_floor_two = floor(Int32, m / 2)
+tmp = U2[jj-m_floor_two:jj+m_floor_two,
+        ii-m_floor_two:ii+m_floor_two]
 
-    # Copy back down from GPU
-    nv = Array(nv_cu)
-    nu = Array(nu_cu)
+# Assign the center value to NaN
+tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
 
-    m_ceil_two = ceil(Int32, m / 2)
-    m_floor_two = floor(Int32, m / 2)
-    hu::Matrix{Float32} = nu[m_ceil_two:end-m_floor_two, m_ceil_two:end-m_floor_two]
-    hv::Matrix{Float32} = nv[m_ceil_two:end-m_floor_two, m_ceil_two:end-m_floor_two]
+# Run the appropriate stat depending on method arg.
+# usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
+histo[jj, ii] = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
+histostd[jj, ii] = im_std(tmp[:])
 
-    return hu, hv
+# else
+#     println("made it")
+#     usum = NaN
+#     tmp = NaN
+#     histostd[jj, ii] = NaN
+# end
+# histo[jj, ii] = usum
+end
+end
+
+# Locate gridpoints w/higher value than the threshold
+coords = findall(
+(real(U2) .> real(histo) .+ threshold .* real(histostd)) .|
+(imag(U2) .> imag(histo) .+ threshold .* imag(histostd)) .|
+(real(U2) .< real(histo) .- threshold .* real(histostd)) .|
+(imag(U2) .< imag(histo) .- threshold .* imag(histostd))
+)
+
+# Then "filter" those points out by changing them to NaN!
+for jj in eachindex(coords)
+nu[coords[jj]] = NaN
+nv[coords[jj]] = NaN
+end
+
+m_ceil_two = ceil(Int32, m / 2)
+m_floor_two = floor(Int32, m / 2)
+hu::Matrix{Float32} = nu[m_ceil_two:end-m_floor_two, m_ceil_two:end-m_floor_two]
+hv::Matrix{Float32} = nv[m_ceil_two:end-m_floor_two, m_ceil_two:end-m_floor_two]
+
+return hu, hv
 end
 
 """
