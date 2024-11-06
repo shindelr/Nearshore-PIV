@@ -12,9 +12,6 @@ using Plots
 using Luxor            # For creating inpolygon() functionality
 using CUDA
 using StaticArrays     # Helpful for array allocations in kernels
-using CellArrays
-
-@define_CuCellArray
 
 
 # MAIN
@@ -75,7 +72,8 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     # u, v = globfilt(u, v)
 
     # return ((x, y), (u, v), pass_sizes)
-    return u, v
+    # return u, v
+    return 0,0,0,0
 
     # Plotting stuff
     # u_map = heatmap(u, 
@@ -220,14 +218,11 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     end
 
     num_windows = length(1:((1-overlap)*N):(sy-N+1)) * length(1:((1-overlap)*M):(sx-M+1))
-    cell_dims = (Int(N), Int(M))
-    nx = length(1:((1-overlap)*N):(sy-N+1))
-    ny = length(1:((1-overlap)*M):(sx-M+1))
-    nz = num_windows
-    cell = SMatrix{cell_dims..., Float32, prod(cell_dims)}
-    winds_A = CuCellArray{cell}(undef, nx, ny, nz)
-    winds_B = CuCellArray{cell}(undef, nx, ny, nz)
+    winds_A_cpu = Array{Float32}(undef, N, M, num_windows)
+    winds_B_cpu = Array{Float32}(undef, N, M, num_windows)
 
+    winds_A_gpu = CUDA.fill!(CuArray{Float32}(undef, N, M, num_windows), 0.0)
+    winds_B_gpu = CUDA.fill!(CuArray{Float32}(undef, N, M, num_windows), 0.0)
 
     cj = 1
     k = 1
@@ -250,14 +245,14 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
             end
 
             # Extract each window from Image A and Image B
-            C = cu(A[floor(Int32, jj):floor(Int32, jj + N - 1), 
-                 floor(Int32, ii):floor(Int32, ii + M - 1)])
-            D = cu(B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
-                 floor(Int32, ii + idx[cj, ci]):floor(Int32, ii + M - 1 + idx[cj, ci])])
+            C = A[floor(Int32, jj):floor(Int32, jj + N - 1), 
+                 floor(Int32, ii):floor(Int32, ii + M - 1)]
+            D = B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
+                 floor(Int32, ii + idx[cj, ci]):floor(Int32, ii + M - 1 + idx[cj, ci])]
             
             # Normalize each window against its mean
-            winds_A[k] = (C .- mean(C))
-            winds_B[k] = (D .- mean(D))
+            winds_A_cpu[:, :, k] = (C .- mean(C))
+            winds_B_cpu[:, :, k] = (D .- mean(D))
 
             # This bit isn't consequential at the moment
             xx[cj, ci] = ii + M / 2
@@ -269,8 +264,12 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
         cj += 1
     end
 
-    # # Cross correlate on the GPU!
-    # @time R = xcorrf2.(winds_A, winds_B, Ref(P), Ref(Pi))
+    copyto!(winds_A_gpu, winds_A_cpu)
+    copyto!(winds_B_gpu, winds_B_cpu)
+
+8    # Cross correlate on the GPU!
+    # @time R = xcorrf2.(winds_A_gpu, winds_B_gpu, Ref(P), Ref(Pi))
+    @time R = xcorrf2.(winds_A_gpu, winds_B_gpu)
     
     # # Find position and value of maximal value of each window in R
     # max_coords = argmax.(R)
@@ -345,6 +344,12 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     # end
     # Should just change idx and idy so not to allocate datax, datay
     return xx, yy, datax, datay
+end
+
+function test_slice_func(A)
+
+    display(A)
+
 end
 
 """
@@ -685,7 +690,8 @@ end
     Author(s): R. Johnson
     Revision: 1.0   Date: 1995/11/27
 """
-function xcorrf2(A::T, B::T, plan, iplan) where {T}
+# function xcorrf2(A::T, B::T, plan, iplan) where {T}
+function xcorrf2(A::T, B::T) where {T}
     # Unpack size() return tuple into appropriate variables
     ma, na = size(A)
     mb, nb = size(B)
@@ -702,8 +708,12 @@ function xcorrf2(A::T, B::T, plan, iplan) where {T}
     pad_matrix_b[1:size(B, 1), 1:size(B, 2)] .= B
 
     # Performs FFTs, inverse FFT, then trim the result
-    return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
-    )[1:ma+mb-1, 1:na+nb-1]
+    fft_ab = fft!(pad_matrix_a) .* fft!(pad_matrix_b)
+    ifft!(fft_ab)
+    return real(fft_ab[1:ma+mb-1, 1:na+nb-1])
+
+    # return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
+    # )[1:ma+mb-1, 1:na+nb-1]
 end
 
 # FILTERS and Interpolations
