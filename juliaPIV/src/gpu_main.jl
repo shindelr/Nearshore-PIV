@@ -185,10 +185,10 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     M = N
 
     # Set up for FFT plans
-    pad_matrix_a = cu(pad_for_xcorr(A[1:M, 1:N]))
-    pad_matrix_b = cu(pad_for_xcorr(B[1:M, 1:N]))
-    P = CUDA.CUFFT.plan_fft(pad_matrix_a)
-    Pi = CUDA.CUFFT.plan_ifft(pad_matrix_a)
+    # pad_matrix_a = cu(pad_for_xcorr(A[1:M, 1:N]))
+    # pad_matrix_b = cu(pad_for_xcorr(B[1:M, 1:N]))
+    # P = CUDA.CUFFT.plan_fft(pad_matrix_a)
+    # Pi = CUDA.CUFFT.plan_ifft(pad_matrix_a)
 
     # Initializing matrices
     sy, sx = size(A)
@@ -212,9 +212,9 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     # Kernel to set every value of idx/y that is NaN to 0 if any are NaN
     if any(isnan.(idx_cu)) || any(isnan.(idy_cu))
         num_blocks = ceil(Int, size(idx, 1)/256)
-        CUDA.@sync begin
-            @cuda threads=256 blocks=num_blocks set_nan_zero_kernel!(idx_cu, idy_cu)
-        end
+        # CUDA.@sync begin
+        @cuda threads=256 blocks=num_blocks set_nan_zero_kernel!(idx_cu, idy_cu)
+        # end
     end
 
     num_windows = length(1:((1-overlap)*N):(sy-N+1)) * length(1:((1-overlap)*M):(sx-M+1))
@@ -223,6 +223,10 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
 
     winds_A_gpu = CUDA.fill!(CuArray{Float32}(undef, N, M, num_windows), 0.0)
     winds_B_gpu = CUDA.fill!(CuArray{Float32}(undef, N, M, num_windows), 0.0)
+    mf = nextpow(2, N + M)
+    pad_a = CUDA.fill!(CuArray{ComplexF32}(undef, mf, mf, num_windows), 0.0)
+    pad_b = CUDA.fill!(CuArray{ComplexF32}(undef, mf, mf, num_windows), 0.0)
+    R = CUDA.fill!(CuArray{Float32}(undef, mf, mf, num_windows), 0.0)
 
     cj = 1
     k = 1
@@ -252,7 +256,9 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
             
             # Normalize each window against its mean
             winds_A_cpu[:, :, k] = (C .- mean(C))
-            winds_B_cpu[:, :, k] = (D .- mean(D))
+            D_norm = D .- mean(D)
+            D_conj = conj.(reverse(D))
+            winds_B_cpu[:, :, k] = D_conj
 
             # This bit isn't consequential at the moment
             xx[cj, ci] = ii + M / 2
@@ -267,10 +273,19 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     copyto!(winds_A_gpu, winds_A_cpu)
     copyto!(winds_B_gpu, winds_B_cpu)
 
-8    # Cross correlate on the GPU!
-    # @time R = xcorrf2.(winds_A_gpu, winds_B_gpu, Ref(P), Ref(Pi))
-    @time R = xcorrf2.(winds_A_gpu, winds_B_gpu)
+    # Cross correlate on the GPU!
+    threads_per_block = (16, 16, 1)
+    grid_x = cld(N, threads_per_block[1])
+    grid_y = cld(M, threads_per_block[2])
+    grid_z = num_windows
+    # num_blocks = ceil(Int, num_windows / threads_per_block)
+    # CUDA.@sync begin
+    @cuda threads=threads_per_block blocks=(grid_x, grid_y, grid_z) xcorrf2!(R, winds_A_gpu, winds_B_gpu, pad_a, pad_b)
+    # end
     
+
+
+    # @time R = xcorrf2.(winds_A_gpu, winds_B_gpu, Ref(P), Ref(Pi))
     # # Find position and value of maximal value of each window in R
     # max_coords = argmax.(R)
 
@@ -690,8 +705,7 @@ end
     Author(s): R. Johnson
     Revision: 1.0   Date: 1995/11/27
 """
-# function xcorrf2(A::T, B::T, plan, iplan) where {T}
-function xcorrf2(A::T, B::T) where {T}
+function xcorrf2(A::T, B::T, plan, iplan) where {T}
     # Unpack size() return tuple into appropriate variables
     ma, na = size(A)
     mb, nb = size(B)
@@ -708,12 +722,34 @@ function xcorrf2(A::T, B::T) where {T}
     pad_matrix_b[1:size(B, 1), 1:size(B, 2)] .= B
 
     # Performs FFTs, inverse FFT, then trim the result
-    fft_ab = fft!(pad_matrix_a) .* fft!(pad_matrix_b)
-    ifft!(fft_ab)
-    return real(fft_ab[1:ma+mb-1, 1:na+nb-1])
+    return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
+    )[1:ma+mb-1, 1:na+nb-1]
+end
 
-    # return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
-    # )[1:ma+mb-1, 1:na+nb-1]
+"""
+    xcorrf2!(A, B)
+
+    A kernelized FFT function.
+"""
+function xcorrf2!(R::J, A::T, B::T, pad_a::F, pad_b::F) where {J, T, F}
+    x = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    y = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+    z = (blockIdx().z - 1) * blockDim().z + threadIdx().z
+
+    if x <= size(A, 1) && y <= size(A, 2) && z <= size(A, 3)
+        mb = size(B, 1)
+        nb = size(B, 2)
+
+        pad_a[x, y, z] = A[x, y, z]
+        pad_b[x, y, z] = B[x, y, z]
+
+        fft!(pad_a[x, y, z])
+
+        # fft!(pad_b[:, :, i])        
+        # fft!(pad_a[:, :, i])
+        # R[i] = real(ifft!(pad_a .* pad_b))[1:mb+mb-1, 1:nb+nb-1]
+    end
+    return
 end
 
 # FILTERS and Interpolations
