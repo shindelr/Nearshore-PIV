@@ -1,6 +1,4 @@
 
-# module JuliaPIV
-# export main
 # Third party modules
 using Statistics
 using FFTW            # Fast Fourier Transforms library built on C
@@ -35,7 +33,6 @@ using Luxor            # For creating inpolygon() functionality
 function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
     overlap::Float32, sensit::Int32) where {T}
     sy, sx = size(A)
-    # total_passes = size(wins, 1)
     total_passes = length(wins)
 
     # Initial passes are for removing large-scale displacements. Initialize
@@ -46,8 +43,8 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
     datay = copy(datax)
 
     for i in 1:total_passes-1
+        # i = 1
         println("Pass ", i, " of ", total_passes)
-
         x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
         datax, datay = localfilt(x, y, datax, datay, sensit)
 
@@ -73,8 +70,8 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
 
     println("Final Pass")
     x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end], overlap, datax, datay, Dt)
-
     return x, y, u, v, SnR, Pkh
+    # return 0, 0, 0, 0, 0, 0
 end
 
 """
@@ -115,110 +112,91 @@ function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32,
     datay = zeros(eltype(A), (xx_dim1, xx_dim2))
     xx = zeros(eltype(A), (xx_dim1, xx_dim2))
     yy = zeros(eltype(A), (xx_dim1, xx_dim2))
-    IN = zeros(Int32, size(A))
 
+    # btime = 0
     cj = 1
-
     for jj in 1:((1-overlap)*N):(sy-N+1)
         ci = 1
         for ii in 1:((1-overlap)*M):(sx-M+1)
-            # Floor correct?
-            IN_i_1 = floor(Int32, (jj + N / 2))
-            IN_i_2 = floor(Int32, (ii + M / 2))
-
-            if IN[IN_i_1, IN_i_2] != 1
-
-                if isnan(idx[cj, ci])
-                    idx[cj, ci] = 0
-                end
-
-                if isnan(idy[cj, ci])
-                    idy[cj, ci] = 0
-                end
-
-                if (jj + idy[cj, ci]) < 1
-                    idy[cj, ci] = 1 - jj
-                elseif (jj + idy[cj, ci]) > (sy - N + 1)
-                    idy[cj, ci] = sy - N + 1 - jj
-                end
-
-                if (ii + idx[cj, ci]) < 1
-                    idx[cj, ci] = 1 - ii
-                elseif (ii + idx[cj, ci]) > (sx - M + 1)
-                    idx[cj, ci] = sx - M + 1 - ii
-                end
-
-                C = A[floor(Int32, jj):floor(Int32, jj + N - 1),
-                    floor(Int32, ii):floor(Int32, ii + M - 1)]
-                D = B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
-                    floor(Int32, ii + idx[cj, ci]):floor(Int32, ii + M - 1 + idx[cj, ci])]
-
-                C = C .- mean(C)
-                D = D .- mean(D)
-                stad1 = std(C)
-                stad2 = std(D)
-
-                if stad1 == 0
-                    stad1 = NaN
-                end
-                if stad2 == 0
-                    stad2 = NaN
-                end
-
-                # Call xcorrf2, passing in the FFT plan and normalize result
-                R::Matrix{Float32} = xcorrf2(C, D, P, Pi, pad_matrix_a, pad_matrix_b) ./ (N * M * stad1 * stad2)
-
-                # Find position of maximal value of R
-                max_coords = Vector{Tuple{Int32,Int32}}()
-                if size(R, 1) == (N - 1)
-                    fast_max!(max_coords, R)
-                else
-                    subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3),
-                        Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
-                    fast_max!(max_coords, subset)
-                    # Adjust for subset positions
-                    max_coords = [(i[1] + Int32(0.5 * N + 1), i[2] + Int32(0.5 * M + 1))
-                                  for i in max_coords]
-                end
-
-                # Handle a vector that has multiple maximum coordinates.
-                # Sum the product of each x and y indice with its own indice within
-                # the max_coords vector.
-                if length(max_coords) > 1
-                    # FLIPPED C,I TO I,C
-                    max_x1 = round(
-                        Int32, sum([c[2] * i for (i, c) in enumerate(max_coords)]) /
-                               sum([c[2] for c in max_coords]))
-                    max_y1 = round(
-                        Int32, sum([c[1] * i for (i, c) in enumerate(max_coords)]) /
-                               sum([c[1] for c in max_coords]))
-
-                    # Handle empty max_coords vector.
-                elseif isempty(max_coords)
-                    idx[cj, ci] = NaN
-                    idy[cj, ci] = NaN
-                    max_x1 = NaN
-                    max_y1 = NaN
-
-                    # Otherwise, unpack into max coordinates
-                else
-                    max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
-                end
-
-                # Store displacements in variables datax/datay
-                datax[cj, ci] -= (max_x1 - M) + idx[cj, ci]
-                datay[cj, ci] -= (max_y1 - M) + idy[cj, ci]
-                xx[cj, ci] = ii + M / 2
-                yy[cj, ci] = ii + N / 2
-                ci += 1
-
-            else
-                datax[cj, ci] = NaN
-                datay[cj, ci] = NaN
-                xx[cj, ci] = ii + M / 2
-                yy[cj, ci] = ii + N / 2
-                ci += 1
+            if isnan(idx[cj, ci])
+                idx[cj, ci] = 0
             end
+
+            if isnan(idy[cj, ci])
+                idy[cj, ci] = 0
+            end
+
+            if (jj + idy[cj, ci]) < 1
+                idy[cj, ci] = 1 - jj
+            elseif (jj + idy[cj, ci]) > (sy - N + 1)
+                idy[cj, ci] = sy - N + 1 - jj
+            end
+
+            if (ii + idx[cj, ci]) < 1
+                idx[cj, ci] = 1 - ii
+            elseif (ii + idx[cj, ci]) > (sx - M + 1)
+                idx[cj, ci] = sx - M + 1 - ii
+            end
+
+            C = A[floor(Int32, jj):floor(Int32, jj + N - 1),
+                floor(Int32, ii):floor(Int32, ii + M - 1)]
+            D = B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
+                floor(Int32, ii + idx[cj, ci]):floor(Int32, ii + M - 1 + idx[cj, ci])]
+
+            C = C .- mean(C)
+            D = D .- mean(D)
+
+            # Call xcorrf2, passing in the FFT plan and normalize result
+            R::Matrix{Float32} = xcorrf2(C, D, P, Pi, pad_matrix_a, pad_matrix_b)
+
+            # Find position of maximal value of R
+            max_coords = Vector{Tuple{Int32,Int32}}()
+
+            subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3), Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
+            fast_max!(max_coords, subset)
+            # Adjust for subset positions
+            max_coords = [(i[1] + Int32(0.5 * N + 1), 
+                           i[2] + Int32(0.5 * M + 1))
+                           for i in max_coords]
+
+            # Handle a vector that has multiple maximum coordinates.
+            # Sum the product of each x and y indice with its own indice within
+            # the max_coords vector.
+            if length(max_coords) > 1
+                max_x1 = round(Int32, sum([c[2] * i for (i, c) in enumerate(max_coords)]) / sum([c[2] for c in max_coords]))
+                max_y1 = round(Int32, sum([c[1] * i for (i, c) in enumerate(max_coords)]) / sum([c[1] for c in max_coords]))
+
+                # Handle empty max_coords vector.
+            elseif isempty(max_coords)
+                idx[cj, ci] = NaN
+                idy[cj, ci] = NaN
+                max_x1 = NaN
+                max_y1 = NaN
+
+            # Otherwise, unpack into max coordinates
+            else
+                max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
+            end
+            if N == 64
+                file_path = "../../tests/gpu_tests/1stpass_maxes.csv"
+                # Check if the file exists; if not, create it with a header
+                if !isfile(file_path)
+                    open(file_path, "w") do f
+                        write(f, "max_y1, max_x1\n")  # Write the header
+                    end
+                end
+
+                open(file_path, "a") do f
+                    write(f, join((max_y1, max_x1), ",") * "\n")  # Convert tuple to CSV line
+                end
+            end
+
+            # Store displacements in variables datax/datay
+            datax[cj, ci] -= (max_x1 - M) + idx[cj, ci]
+            datay[cj, ci] -= (max_y1 - M) + idy[cj, ci]
+            xx[cj, ci] = ii + M / 2
+            yy[cj, ci] = ii + N / 2
+            ci += 1
         end
 
         cj += 1
@@ -891,6 +869,10 @@ function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32},
     nu[from_cols:end-minus_rows, from_cols:end-minus_rows] = u
     nv[from_cols:end-minus_rows, from_cols:end-minus_rows] = v
 
+    # writedlm("../../tests/gpu_tests/nu.csv", nu, ',')
+    # writedlm("../../tests/gpu_tests/nv.csv", nv, ',')
+
+
     # INx = zeros(eltype(nu), size(nu))
     # Masking not implemented
     # INx[from_cols:end-minus_rows, from_cols:end-minus_rows] = IN
@@ -898,7 +880,6 @@ function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32},
     U2::Matrix{ComplexF32} = nu .+ im .* nv
 
     ma, na = size(U2)
-    @show size(U2)
     histostd = zeros(ComplexF32, size(nu))
     histo = zeros(ComplexF32, size(nu))
 
@@ -934,7 +915,8 @@ function localfilt(x::Matrix{Float32}, y::Matrix{Float32}, u::Matrix{Float32},
         (real(U2) .> real(histo) .+ threshold .* real(histostd)) .|
         (imag(U2) .> imag(histo) .+ threshold .* imag(histostd)) .|
         (real(U2) .< real(histo) .- threshold .* real(histostd)) .|
-        (imag(U2) .< imag(histo) .- threshold .* imag(histostd)))
+        (imag(U2) .< imag(histo) .- threshold .* imag(histostd))
+        )
 
     # Then "filter" those points out by changing them to NaN!
     for jj in eachindex(coords)
@@ -1149,7 +1131,7 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     A = convert(Matrix{Float32}, image_pair[1])
     B = convert(Matrix{Float32}, image_pair[2])
 
-    pivwin = 16
+    pivwin = final_win_size
     log2pivwin::Int32 = log2(pivwin)
     if log2pivwin - round(log2pivwin) != 0
         error("pivwin must be factor of 2")
@@ -1192,13 +1174,10 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
                     aspect_ratio = :equal, 
                     ylimits=(0, 200), 
                     xlimits=(0, 385))
-    plot(u_map, v_map, layout = (2, 1))
-    # png(dbl_plot, "../../tests/gpu_tests/output.png")
+    dbl_plot = plot(u_map, v_map, layout = (2, 1))
+    png(dbl_plot, "../../tests/gpu_tests/replaaace me .png")
 
 end
-# end
-
-# TESTING
 
 function timed_main()
     im1 = load("../data/im1.jpg")
@@ -1210,5 +1189,3 @@ function timed_main()
 
     main(im_pair, Int32(16), Float32(0.5))
 end
-
-timed_main()

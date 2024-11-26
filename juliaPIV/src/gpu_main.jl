@@ -39,7 +39,7 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     B = convert(Matrix{Float32}, image_pair[2])
     # A_cu = CuArray(A)
     # B_cu = CuArray(B)
-
+    @show size(A)
     pivwin = 16
     log2pivwin::Int32 = log2(pivwin)
     if log2pivwin - round(log2pivwin) != 0
@@ -73,9 +73,9 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
 
     # return ((x, y), (u, v), pass_sizes)
     # return u, v
-    return 0,0,0,0
+    # return 0,0,0,0
 
-    # Plotting stuff
+    # # Plotting stuff
     # u_map = heatmap(u, 
     #                 title = "u [pixels/frame]", 
     #                 aspect_ratio = :equal, 
@@ -88,7 +88,7 @@ function main(image_pair, final_win_size::Int32, ol::Float32)
     #                 ylimits=(0, 200), 
     #                 xlimits=(0, 385))
     # dbl_plot = plot(u_map, v_map, layout = (2, 1))
-    # png(dbl_plot, "../../tests/gpu_tests/output_20241021T0933.png")
+    # png(dbl_plot, "../../tests/gpu_tests/output_20241111T0953.png")
 
 end
 
@@ -131,6 +131,8 @@ function multipassx(A::T, B::T, wins::Vector{Int32}, Dt::Int32,
         println("Pass ", i, " of ", total_passes)
 
         x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
+        # datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
+        # writedlm("../../tests/gpu_tests/datax20241111T1004.csv", datax, ',')
 
         datax, datay = localfilt(x, y, datax, datay, sensit)
 
@@ -154,8 +156,8 @@ function multipassx(A::T, B::T, wins::Vector{Int32}, Dt::Int32,
 
     # println("Final Pass")
     # x, y, u, v, SnR, Pkh = finalpass(A, B, wins[end], overlap, datax, datay, Dt)
-    # return 0, 0, 0, 0, 0, 0
-    return datax, datay
+    return 0, 0, 0, 0, 0, 0
+    # return datax, datay
     # return x, y, u, v, SnR, Pkh
 end
 
@@ -185,10 +187,10 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     M = N
 
     # Set up for FFT plans
-    # pad_matrix_a = cu(pad_for_xcorr(A[1:M, 1:N]))
-    # pad_matrix_b = cu(pad_for_xcorr(B[1:M, 1:N]))
-    # P = CUDA.CUFFT.plan_fft(pad_matrix_a)
-    # Pi = CUDA.CUFFT.plan_ifft(pad_matrix_a)
+    pad_matrix_a = cu(pad_for_xcorr(A[1:M, 1:N]))
+    pad_matrix_b = cu(pad_for_xcorr(B[1:M, 1:N]))
+    P = CUDA.CUFFT.plan_fft(pad_matrix_a)
+    Pi = CUDA.CUFFT.plan_ifft(pad_matrix_a)
 
     # Initializing matrices
     sy, sx = size(A)
@@ -212,158 +214,187 @@ function firstpass(A::T, B::T, N::Int32, overlap::Float32,
     # Kernel to set every value of idx/y that is NaN to 0 if any are NaN
     if any(isnan.(idx_cu)) || any(isnan.(idy_cu))
         num_blocks = ceil(Int, size(idx, 1)/256)
-        # CUDA.@sync begin
         @cuda threads=256 blocks=num_blocks set_nan_zero_kernel!(idx_cu, idy_cu)
-        # end
+        copyto!(idx, idx_cu)
+        copyto!(idy, idy_cu)
     end
 
     num_windows = length(1:((1-overlap)*N):(sy-N+1)) * length(1:((1-overlap)*M):(sx-M+1))
+    # CPU allocations
     winds_A_cpu = Array{Float32}(undef, N, M, num_windows)
     winds_B_cpu = Array{Float32}(undef, N, M, num_windows)
 
+    # GPU allocations
     winds_A_gpu = CUDA.fill!(CuArray{Float32}(undef, N, M, num_windows), 0.0)
     winds_B_gpu = CUDA.fill!(CuArray{Float32}(undef, N, M, num_windows), 0.0)
-    mf = nextpow(2, N + M)
-    pad_a = CUDA.fill!(CuArray{ComplexF32}(undef, mf, mf, num_windows), 0.0)
-    pad_b = CUDA.fill!(CuArray{ComplexF32}(undef, mf, mf, num_windows), 0.0)
-    R = CUDA.fill!(CuArray{Float32}(undef, mf, mf, num_windows), 0.0)
+    mf = nextpow(2, M + N)  # Get size of padded xcorr matrices
+    R = CUDA.fill!(CuArray{Float32}(undef, mf-1, mf-1, num_windows), 0.0)
+    R_maxes = CUDA.fill!(CuArray{Float32}(undef, mf-1, mf-1, num_windows), 0.0)
+    @show size(winds_A_cpu)
 
-    cj = 1
-    k = 1
-    for jj in 1:((1-overlap)*N):(sy-N+1)  # Iterate in steps of half a window size
-        ci = 1
-        for ii in 1:((1-overlap)*M):(sx-M+1)
+    window_A_bounds::Vector{NTuple{4, Int32}} = []
+    window_B_bounds::Vector{NTuple{4, Int32}} = []
 
-            # idx/y are matrices containing pixel displacement data in x/y directions
-            # Adjust displacement coordinates for index bounding
-            if (jj + idy[cj, ci]) < 1
-                idy[cj, ci] = 1 - jj
-            elseif (jj + idy[cj, ci]) > (sy - N + 1)
-                idy[cj, ci] = sy - N + 1 - jj
-            end
+    for (cj, jj) in enumerate(1:((1-overlap)*N):(sy-N+1)),
+        (ci, ii) in enumerate(1:((1-overlap)*M):(sx-M+1))
 
-            if (ii + idx[cj, ci]) < 1
-                idx[cj, ci] = 1 - ii
-            elseif (ii + idx[cj, ci]) > (sx - M + 1)
-                idx[cj, ci] = sx - M + 1 - ii
-            end
+        displace_x = idx[cj , ci]
+        displace_y = idy[cj , ci]
 
-            # Extract each window from Image A and Image B
-            C = A[floor(Int32, jj):floor(Int32, jj + N - 1), 
-                 floor(Int32, ii):floor(Int32, ii + M - 1)]
-            D = B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
-                 floor(Int32, ii + idx[cj, ci]):floor(Int32, ii + M - 1 + idx[cj, ci])]
-            
-            # Normalize each window against its mean
-            winds_A_cpu[:, :, k] = (C .- mean(C))
-            D_norm = D .- mean(D)
-            D_conj = conj.(reverse(D))
-            winds_B_cpu[:, :, k] = D_conj
-
-            # This bit isn't consequential at the moment
-            xx[cj, ci] = ii + M / 2
-            yy[cj, ci] = ii + N / 2            
-
-            ci += 1
-            k += 1
+        if (jj + idy[cj, ci]) < 1
+            idy[cj, ci] = 1 - jj
+        elseif (jj + idy[cj, ci]) > (sy - N + 1)
+            idy[cj, ci] = sy - N + 1 - jj
         end
-        cj += 1
+
+        if (ii + idx[cj, ci]) < 1
+            idx[cj, ci] = 1 - ii
+        elseif (ii + idx[cj, ci]) > (sx - M + 1)
+            idx[cj, ci] = sx - M + 1 - ii
+        end
+
+        push!(window_A_bounds, (ii, ii + N - 1, jj, jj + M - 1))
+        push!(window_B_bounds, 
+             (ii + displace_x,
+             (ii + N - 1) + displace_x,
+             jj + displace_y,
+             (jj+ M - 1) + displace_y))
     end
+
+    window_A_bounds_gpu = cu(window_A_bounds)
+    window_B_bounds_gpu = cu(window_B_bounds)
+    A_cu = cu(A); B_cu = cu(B)
+
+    compute_windows!(R, A_cu, B_cu, window_A_bounds_gpu, window_B_bounds_gpu, P, Pi)
+
+
+
+
+    # cj = 1
+    # k = 1
+    # for jj in 1:((1-overlap)*N):(sy-N+1)  # Iterate in steps of half a window size
+    #     ci = 1
+    #     for ii in 1:((1-overlap)*M):(sx-M+1)
+
+    #         # idx/y are matrices containing pixel displacement data in x/y directions
+    #         # Adjust displacement coordinates for index bounding
+    #         if (jj + idy[cj, ci]) < 1
+    #             idy[cj, ci] = 1 - jj
+    #         elseif (jj + idy[cj, ci]) > (sy - N + 1)
+    #             idy[cj, ci] = sy - N + 1 - jj
+    #         end
+
+    #         if (ii + idx[cj, ci]) < 1
+    #             idx[cj, ci] = 1 - ii
+    #         elseif (ii + idx[cj, ci]) > (sx - M + 1)
+    #             idx[cj, ci] = sx - M + 1 - ii
+    #         end
+    #         if cj == 1 && ci == 3
+    #             @show jj ii (jj+N-1) (ii+M-1)
+    #         end
+    #         # Extract each window from Image A and Image B
+    #         C = A[floor(Int32, jj):floor(Int32, jj + N - 1), 
+    #              floor(Int32, ii):floor(Int32, ii + M - 1)]
+    #         D = B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
+    #              floor(Int32, ii + idx[cj, ci]):floor(Int32, ii + M - 1 + idx[cj, ci])]
+            
+    #         # Normalize each window against its mean
+    #         winds_A_cpu[:, :, k] = (C .- mean(C))
+    #         winds_B_cpu[:, :, k] = (D .- mean(D)) 
+
+    #         # This bit isn't consequential at the moment
+    #         xx[cj, ci] = ii + M / 2
+    #         yy[cj, ci] = ii + N / 2            
+
+    #         ci += 1
+    #         k += 1
+    #     end
+    #     cj += 1
+    # end
 
     copyto!(winds_A_gpu, winds_A_cpu)
     copyto!(winds_B_gpu, winds_B_cpu)
+    @show size(winds_A_cpu)
 
     # Cross correlate on the GPU!
-    threads_per_block = (16, 16, 1)
-    grid_x = cld(N, threads_per_block[1])
-    grid_y = cld(M, threads_per_block[2])
-    grid_z = num_windows
-    # num_blocks = ceil(Int, num_windows / threads_per_block)
-    # CUDA.@sync begin
-    @cuda threads=threads_per_block blocks=(grid_x, grid_y, grid_z) xcorrf2!(R, winds_A_gpu, winds_B_gpu, pad_a, pad_b)
-    # end
-    
+    @time for i in 1:size(winds_A_cpu, 3)
+        R[:, :, i] = xcorrf2(winds_A_gpu[:, :, i], winds_B_gpu[:, :, i], P, Pi)
+        # R_maxes[:, :, i] = argmax(R[:, :, i])
+    end
 
+    R_cpu = Array(R)
 
-    # @time R = xcorrf2.(winds_A_gpu, winds_B_gpu, Ref(P), Ref(Pi))
-    # # Find position and value of maximal value of each window in R
-    # max_coords = argmax.(R)
+    # OG loop structure for the maximums
+    cj = 1
+    k = 1
+    for jj in 1:((1-overlap)*N):(sy-N+1)
+        ci = 1
+        for ii in 1:((1-overlap)*M):(sx-M+1)
+            max_coords = Vector{Tuple{Int32,Int32}}()
+            if size(R_cpu, 1) == (N - 1)
+                fast_max!(max_coords, R_cpu[:, :, k])
+            else
+                subset = R_cpu[Int32(0.5 * N + 2):Int32(1.5 * N - 3),
+                            Int32(0.5 * M + 2):Int32(1.5 * M - 3), k]
+                fast_max!(max_coords, subset)
+                # Adjust for subset positions
+                max_coords = [(i[1] + Int32(0.5 * N + 1), i[2] + Int32(0.5 * M + 1))
+                                for i in max_coords]
+            end
 
-    # # This first branch probably shouldn't happen
-    # if length(max_coords) == 0
-    #     idx .= NaN
-    #     idy .= NaN
-    # # Much more likely:
-    # else
-    #     cj = 1
-    #     k = 1
-    #     for jj in 1:((1-overlap)*N):(sy-N+1)
-    #         ci = 1
-    #         for ii in 1:((1-overlap)*M):(sx-M+1)
-    #             datax[cj, ci] -= max_coords[k][1] + idx[cj, ci]
-    #             datay[cj, ci] -= max_coords[k][2] + idy[cj, ci]
-    #             ci += 1
-    #             k += 1
-    #     end
-    #         cj += 1
-    #     end
-    # end
+            # Handle a vector that has multiple maximum coordinates.
+            # Sum the product of each x and y indice with its own indice within
+            # the max_coords vector.
+            if length(max_coords) >= 1
+                if length(max_coords) == 1
+                    max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
+                else
+                    max_x1 = round(
+                        Int32, 
+                        sum([c[2] * i for (i, c) in enumerate(max_coords)]) /
+                            sum([c[2] for c in max_coords])
+                            )
+                    max_y1 = round(
+                        Int32, 
+                        sum([c[1] * i for (i, c) in enumerate(max_coords)]) /
+                            sum([c[1] for c in max_coords])
+                            )
+                end
+                # Store displacements in variables datax/datay
+                datax[cj, ci] -= (max_x1 - M) + idx[cj, ci]
+                datay[cj, ci] -= (max_y1 - M) + idy[cj, ci]
+                xx[cj, ci] = ii + M / 2
+                yy[cj, ci] = ii + N / 2
 
-    # max_coords = Vector{Tuple{Int32,Int32}}()
-    # if size(R, 1) == (N - 1)
-        # fast_max!(max_coords, R)
-    # else
-    #     subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3),
-    #                 Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
-    #     fast_max!(max_coords, subset)
-    #     # Adjust for subset positions
-    #     max_coords = [(i[1] + Int32(0.5 * N + 1), i[2] + Int32(0.5 * M + 1))
-    #                     for i in max_coords]
-    # end
+            # Empty max_coords vector
+            else
+                idx[cj, ci] = 0
+                idy[cj, ci] = 0
+                max_x1 = NaN
+                max_y1 = NaN
 
-    # # Handle a vector that has multiple maximum coordinates.
-    # # Sum the product of each x and y indice with its own indice within
-    # # the max_coords vector.
-    # if length(max_coords) >= 1
-    #     if length(max_coords) == 1
-    #         max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
-    #     else
-    #         max_x1 = round(
-    #             Int32, 
-    #             sum([c[2] * i for (i, c) in enumerate(max_coords)]) /
-    #                 sum([c[2] for c in max_coords])
-    #                 )
-    #         max_y1 = round(
-    #             Int32, 
-    #             sum([c[1] * i for (i, c) in enumerate(max_coords)]) /
-    #                 sum([c[1] for c in max_coords])
-    #                 )
-    #     end
-    #     # Store displacements in variables datax/datay
-    #     datax[cj, ci] -= (max_x1 - M) + idx[cj, ci]
-    #     datay[cj, ci] -= (max_y1 - M) + idy[cj, ci]
-    #     xx[cj, ci] = ii + M / 2
-    #     yy[cj, ci] = ii + N / 2
-
-    # # Empty max_coords vector
-    # else
-    #     idx[cj, ci] = 0
-    #     idy[cj, ci] = 0
-    #     max_x1 = NaN
-    #     max_y1 = NaN
-
-    #     datax[cj, ci] = NaN
-    #     datay[cj, ci] = NaN
-    #     xx[cj, ci] = ii + M / 2
-    #     yy[cj, ci] = ii + N / 2  
-    # end
-    # Should just change idx and idy so not to allocate datax, datay
+                datax[cj, ci] = NaN
+                datay[cj, ci] = NaN
+                xx[cj, ci] = ii + M / 2
+                yy[cj, ci] = ii + N / 2  
+            end
+        ci += 1
+        k += 1
+    end
+    cj += 1
+    end
     return xx, yy, datax, datay
+    # return datax, datay
 end
 
-function test_slice_func(A)
+function compute_windows!(R, image_A, image_B, bounds_A, bounds_B, plan, iplan)
+    for i in 1:length(bounds_A)
+        bound_A = bounds_A[i]; bound_B = bounds_B[i]
+        @show bound_A bound_B
+        win_A = @view image_A[bound_A[1]:bound_A[2], bound_A[3]:bound_A[4]]
+        win_B = @view image_B[bound_B[1]:bound_B[2], bound_B[3]:bound_B[4]]
 
-    display(A)
+    end
 
 end
 
@@ -726,31 +757,6 @@ function xcorrf2(A::T, B::T, plan, iplan) where {T}
     )[1:ma+mb-1, 1:na+nb-1]
 end
 
-"""
-    xcorrf2!(A, B)
-
-    A kernelized FFT function.
-"""
-function xcorrf2!(R::J, A::T, B::T, pad_a::F, pad_b::F) where {J, T, F}
-    x = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    y = (blockIdx().y - 1) * blockDim().y + threadIdx().y
-    z = (blockIdx().z - 1) * blockDim().z + threadIdx().z
-
-    if x <= size(A, 1) && y <= size(A, 2) && z <= size(A, 3)
-        mb = size(B, 1)
-        nb = size(B, 2)
-
-        pad_a[x, y, z] = A[x, y, z]
-        pad_b[x, y, z] = B[x, y, z]
-
-        fft!(pad_a[x, y, z])
-
-        # fft!(pad_b[:, :, i])        
-        # fft!(pad_a[:, :, i])
-        # R[i] = real(ifft!(pad_a .* pad_b))[1:mb+mb-1, 1:nb+nb-1]
-    end
-    return
-end
 
 # FILTERS and Interpolations
 """
@@ -1150,30 +1156,30 @@ histostd = zeros(ComplexF32, size(nu))
 histo = zeros(ComplexF32, size(nu))
 
 for ii in m-1:1:na-m+2
-for jj in m-1:1:ma-m+2
+    for jj in m-1:1:ma-m+2
 
-# if INx[jj, ii] != 1
-# Get a 3x3 submatrix of U2
-m_floor_two = floor(Int32, m / 2)
-tmp = U2[jj-m_floor_two:jj+m_floor_two,
-        ii-m_floor_two:ii+m_floor_two]
+    # if INx[jj, ii] != 1
+    # Get a 3x3 submatrix of U2
+    m_floor_two = floor(Int32, m / 2)
+    tmp = U2[jj-m_floor_two:jj+m_floor_two,
+            ii-m_floor_two:ii+m_floor_two]
 
-# Assign the center value to NaN
-tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
+    # Assign the center value to NaN
+    tmp[ceil(Int32, m / 2), ceil(Int32, m / 2)] = NaN
 
-# Run the appropriate stat depending on method arg.
-# usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
-histo[jj, ii] = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
-histostd[jj, ii] = im_std(tmp[:])
+    # Run the appropriate stat depending on method arg.
+    # usum = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
+    histo[jj, ii] = median_bool ? im_median_magnitude(tmp[:]) : mean(tmp[:])
+    histostd[jj, ii] = im_std(tmp[:])
 
-# else
-#     println("made it")
-#     usum = NaN
-#     tmp = NaN
-#     histostd[jj, ii] = NaN
-# end
-# histo[jj, ii] = usum
-end
+    # else
+    #     println("made it")
+    #     usum = NaN
+    #     tmp = NaN
+    #     histostd[jj, ii] = NaN
+    # end
+    # histo[jj, ii] = usum
+    end
 end
 
 # Locate gridpoints w/higher value than the threshold
@@ -1374,8 +1380,7 @@ Returns
 - `max_coords::Vector{Tuple{Int32, Int32}}`: The updated vector containing the coordinates of the maximum value(s).
 """
 function fast_max!(max_coords::Vector{Tuple{Int32,Int32}}, collection::Matrix{Float32})
-# function fast_max!(max_coords::CuArray{Tuple{Int32, Int32}}, collection::CuArray{Float32})
-    max_val::Float64 = -Inf
+    max_val::Float32 = -Inf
     for i in axes(collection, 1)
         for j in axes(collection, 2)
             if collection[i, j] > max_val
@@ -1390,6 +1395,7 @@ function fast_max!(max_coords::Vector{Tuple{Int32,Int32}}, collection::Matrix{Fl
         end
 
     end
+    # @show size(max_coords)
     return max_coords
 end
 # end module
