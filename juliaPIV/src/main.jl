@@ -32,8 +32,8 @@ using Luxor            # For creating inpolygon() functionality
 """
 function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
     overlap::Float32, sensit::Int32) where {T}
-    sy, sx = size(A)
-    total_passes = length(wins)
+    sy, sx = Int32.(size(A))
+    total_passes = Int32(length(wins))
 
     # Initial passes are for removing large-scale displacements. Initialize
     # displacements (datax,datay) to zero
@@ -47,8 +47,8 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
         println("Pass ", i, " of ", total_passes)
         x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
         datax, datay = localfilt(x, y, datax, datay, sensit)
-
         datax, datay = linear_naninterp(datax, datay)
+
         datax = floor.(datax)
         datay = floor.(datay)
 
@@ -88,11 +88,6 @@ end
     overlap: Fraction of window overlap. Int.\n
     idx: Matrix of same type as A, containing data displacement information.\n
     idy: Matrix of same type as A, containing data displacement information.\n
-    \n**:returns:**\n
-    x: \n
-    y: \n
-    datax: \n
-    datay: \n
 """
 function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32,
     idx::Matrix{T}, idy::Matrix{Float32}) where {T}
@@ -113,7 +108,6 @@ function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32,
     xx = zeros(eltype(A), (xx_dim1, xx_dim2))
     yy = zeros(eltype(A), (xx_dim1, xx_dim2))
 
-    # btime = 0
     cj = 1
     for jj in 1:((1-overlap)*N):(sy-N+1)
         ci = 1
@@ -138,6 +132,7 @@ function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32,
                 idx[cj, ci] = sx - M + 1 - ii
             end
 
+            # Get windows
             C = A[floor(Int32, jj):floor(Int32, jj + N - 1),
                 floor(Int32, ii):floor(Int32, ii + M - 1)]
             D = B[floor(Int32, jj + idy[cj, ci]):floor(Int32, jj + N - 1 + idy[cj, ci]),
@@ -146,27 +141,24 @@ function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32,
             C = C .- mean(C)
             D = D .- mean(D)
 
-            # Call xcorrf2, passing in the FFT plan and normalize result
+            # Call xcorrf2, passing in the FFT plans
             R::Matrix{Float32} = xcorrf2(C, D, P, Pi, pad_matrix_a, pad_matrix_b)
 
             # Find position of maximal value of R
-            max_coords = Vector{Tuple{Int32,Int32}}()
-
+            max_coords = Vector{NTuple{2, Float32}}()
             subset = R[Int32(0.5 * N + 2):Int32(1.5 * N - 3), Int32(0.5 * M + 2):Int32(1.5 * M - 3)]
             fast_max!(max_coords, subset)
+
             # Adjust for subset positions
             max_coords = [(i[1] + Int32(0.5 * N + 1), 
                            i[2] + Int32(0.5 * M + 1))
                            for i in max_coords]
 
-            # Handle a vector that has multiple maximum coordinates.
-            # Sum the product of each x and y indice with its own indice within
-            # the max_coords vector.
+            # Handle a vector that has multiple maximum coordinates. Take the 
+            # weighted average of the coordinates.
             if length(max_coords) > 1
                 max_x1 = round(Int32, sum([c[2] * i for (i, c) in enumerate(max_coords)]) / sum([c[2] for c in max_coords]))
                 max_y1 = round(Int32, sum([c[1] * i for (i, c) in enumerate(max_coords)]) / sum([c[1] for c in max_coords]))
-
-                # Handle empty max_coords vector.
             elseif isempty(max_coords)
                 idx[cj, ci] = NaN
                 idy[cj, ci] = NaN
@@ -176,19 +168,6 @@ function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32,
             # Otherwise, unpack into max coordinates
             else
                 max_y1, max_x1 = max_coords[1][1], max_coords[1][2]
-            end
-            if N == 64
-                file_path = "../../tests/gpu_tests/1stpass_maxes.csv"
-                # Check if the file exists; if not, create it with a header
-                if !isfile(file_path)
-                    open(file_path, "w") do f
-                        write(f, "max_y1, max_x1\n")  # Write the header
-                    end
-                end
-
-                open(file_path, "a") do f
-                    write(f, join((max_y1, max_x1), ",") * "\n")  # Convert tuple to CSV line
-                end
             end
 
             # Store displacements in variables datax/datay
@@ -274,12 +253,9 @@ function finalpass(A::Matrix{T}, B::Matrix{T}, N::Int32, ol::Float32,
                 idx[cj, ci] = sx - M + 1 - ii
             end
 
-            D2 = B[
-                Int32(jj + idy[cj, ci]):Int32(jj + N - 1 + idy[cj, ci]),
-                Int32(ii + idx[cj, ci]):Int32(ii + M - 1 + idx[cj, ci])
-            ]
-            E = A[Int32(jj):Int32(jj + N - 1),
-                Int32(ii):Int32(ii + M - 1)]
+            D2 = B[Int32(jj + idy[cj, ci]):Int32(jj + N - 1 + idy[cj, ci]),
+                   Int32(ii + idx[cj, ci]):Int32(ii + M - 1 + idx[cj, ci])]
+            E = A[Int32(jj):Int32(jj + N - 1), Int32(ii):Int32(ii + M - 1)]
 
             stad1 = std(E)
             stad2 = std(D2)
@@ -298,7 +274,7 @@ function finalpass(A::Matrix{T}, B::Matrix{T}, N::Int32, ol::Float32,
             R::Matrix{Float32} = xcorrf2(E, F, P, Pi, pad_matrix_a, pad_matrix_b) ./ (N * M * stad1 * stad2)
 
             if !any(isnan.(R)) & !all(x -> x == 0, R)
-                max_coords = Vector{Tuple{Int32,Int32}}()
+                max_coords = Vector{Tuple{Float32,Float32}}()
                 # Find position of maximal value of R
                 if size(R, 1) == (N - 1)
                     fast_max!(max_coords, R)
@@ -465,24 +441,31 @@ end
     Author(s): R. Johnson
     Revision: 1.0   Date: 1995/11/27
 """
-function xcorrf2(A::Matrix{Float32}, B::Matrix{Float32}, plan, iplan,
+function xcorrf2(A::Matrix{Float32}, B::Matrix{Float32}, 
+    plan::FFTW.cFFTWPlan, iplan::AbstractFFTs.ScaledPlan,
     pad_matrix_a::Matrix{ComplexF32}, pad_matrix_b::Matrix{ComplexF32})
 
     # Unpack size() return tuple into appropriate variables
-    ma, na = size(A)
-    mb, nb = size(B)
+    ma, na = Int32.(size(A))
+    mb, nb = Int32.(size(B))
 
     # Reverse conjugate
-    B = conj(B[mb:-1:1, nb:-1:1])
+    B_conj = @view B[mb:-1:1, nb:-1:1]
+    for i in 1:mb, j in 1:nb
+        pad_matrix_b[i, j] = conj(B_conj[i, j])
+    end
 
     # Transfer data from og matrix to optimized sized ones
-    pad_matrix_a[1:size(A, 1), 1:size(A, 2)] = A[1:size(A, 1), 1:size(A, 2)]
-    pad_matrix_b[1:size(B, 1), 1:size(B, 2)] = B[1:size(B, 1), 1:size(B, 2)]
+    pad_matrix_a[1:ma, 1:na] = A[1:ma, 1:na]
 
-    # Performs FFTs, inverse FFT, then trim the result
-    # I did it this weird way to avoid four array allocations
-    return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
-    )[1:ma+mb-1, 1:na+nb-1]
+    # Perform FFTs and Matrix Mul
+    FFTW.fft!(plan, pad_matrix_a)
+    FFTW.fft!(plan, pad_matrix_b)
+    pad_matrix_a .= pad_matrix_a .* pad_matrix_b
+    FFTW.ifft!(iplan, pad_matrix_a)
+
+    # Trim
+    return real(pad_matrix_a[1:ma + mb - 1, 1:na + nb - 1])
 end
 
 
@@ -695,10 +678,6 @@ function build_grids_2(data::Matrix{Float32})
 
     coarse_ys = LinRange(min_y, max_y, coarse_y_dim)
     coarse_xs = LinRange(min_x, max_x, coarse_x_dim)
-
-    # OG no NaN border
-    # fine_yi_dim = (coarse_y_dim * 2) + 1
-    # fine_xi_dim = (coarse_x_dim * 2) + 1
 
     # NaN border adjustment
     fine_yi_dim = (coarse_y_dim * 2) - 1
@@ -1088,7 +1067,12 @@ Returns
 --------
 - `max_coords::Vector{Tuple{Int32, Int32}}`: The updated vector containing the coordinates of the maximum value(s).
 """
-function fast_max!(max_coords::Vector{Tuple{Int32,Int32}}, collection::Matrix{Float32})
+function fast_max!(max_coords::Vector{NTuple{2, Float32}}, collection::Matrix{Float32})
+    if all(x -> x == 0, collection)
+        empty!(max_coords)
+        return
+    end
+
     max_val::Float64 = -Inf
     for i in axes(collection, 1)
         for j in axes(collection, 2)
@@ -1102,7 +1086,6 @@ function fast_max!(max_coords::Vector{Tuple{Int32,Int32}}, collection::Matrix{Fl
                 end
             end
         end
-
     end
     return max_coords
 end
@@ -1131,15 +1114,15 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     A = convert(Matrix{Float32}, image_pair[1])
     B = convert(Matrix{Float32}, image_pair[2])
 
-    pivwin = final_win_size
-    log2pivwin::Int32 = log2(pivwin)
-    if log2pivwin - round(log2pivwin) != 0
-        error("pivwin must be factor of 2")
+    pass_sizes = zeros(Int32, 4)
+    try 
+        log2pivwin::Int32 = Int32(log2(final_win_size))
+        pass_sizes::Vector{Int32} = 2 .^ (Int32(6):-1:log2pivwin)
+        push!(pass_sizes, final_win_size) # Duplicate final element
+    catch 
+        InexactError
+        error("final_win_size must be factor of 2")
     end
-
-    pass_sizes::Vector{Int32} = 2 .^ collect(Int32, 6:-1:log2pivwin)
-    # push!(pass_sizes, pass_sizes[end]) # Duplicate final element
-    push!(pass_sizes, final_win_size) # Duplicate final element
 
     # other input params for piv
     dt::Int32 = 1
@@ -1175,13 +1158,13 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
                     ylimits=(0, 200), 
                     xlimits=(0, 385))
     dbl_plot = plot(u_map, v_map, layout = (2, 1))
-    png(dbl_plot, "../../tests/gpu_tests/replaaace me .png")
+    # png(dbl_plot, "../../tests/gpu_tests/replaaace me .png")
 
 end
 
 function timed_main()
-    im1 = load("../data/im1.jpg")
-    im2 = load("../data/im2.jpg")
+    im1::Matrix{Gray{N0f8}} = load("../data/im1.jpg")
+    im2::Matrix{Gray{N0f8}} = load("../data/im2.jpg")
     crops = (24, 2424, 1, 2048)
     im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
     im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
