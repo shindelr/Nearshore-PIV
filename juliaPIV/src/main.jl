@@ -53,6 +53,7 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
         datay = floor.(datay)
 
         if i != total_passes - 1
+            # Y, X, YI, XI = build_grids_2(datax, overlap, sy, sx, wins[i])
             Y, X, YI, XI = build_grids_2(datax)
             datax = regular_interp(datax, X, Y, XI, YI)
             datay = regular_interp(datay, X, Y, XI, YI)
@@ -159,6 +160,7 @@ function firstpass(A::Matrix{T}, B::Matrix{T}, N::Int32, overlap::Float32,
             if length(max_coords) > 1
                 max_x1 = round(Int32, sum([c[2] * i for (i, c) in enumerate(max_coords)]) / sum([c[2] for c in max_coords]))
                 max_y1 = round(Int32, sum([c[1] * i for (i, c) in enumerate(max_coords)]) / sum([c[1] for c in max_coords]))
+
             elseif isempty(max_coords)
                 idx[cj, ci] = NaN
                 idy[cj, ci] = NaN
@@ -458,14 +460,9 @@ function xcorrf2(A::Matrix{Float32}, B::Matrix{Float32},
     # Transfer data from og matrix to optimized sized ones
     pad_matrix_a[1:ma, 1:na] = A[1:ma, 1:na]
 
-    # Perform FFTs and Matrix Mul
-    FFTW.fft!(plan, pad_matrix_a)
-    FFTW.fft!(plan, pad_matrix_b)
-    pad_matrix_a .= pad_matrix_a .* pad_matrix_b
-    FFTW.ifft!(iplan, pad_matrix_a)
-
-    # Trim
-    return real(pad_matrix_a[1:ma + mb - 1, 1:na + nb - 1])
+    # FFT and trim
+    return real(iplan * ((plan * pad_matrix_b) .* (plan * pad_matrix_a))
+    )[1:ma+mb-1, 1:na+nb-1]
 end
 
 
@@ -662,6 +659,21 @@ end
     `fine_XI`: A 1-dimensional array representing the fine grid in the x-direction.
 """
 function build_grids_2(data::Matrix{Float32})
+# function build_grids_2(data::Matrix{Float32}, ol, sy, sx, win_size)
+    # windiv2 = win_size ÷ 2
+    # if win_size != 16
+    #     coarse_xs = LinRange(1, (1 - ol) * 2 * windiv2 + 1, sx - 2 * windiv2 + windiv2)
+    #     coarse_ys = LinRange(1, (1 - ol) * 2 * windiv2 + 1, sy - 2 * windiv2 + windiv2)
+    #     fine_XI = LinRange(1, (1 - ol) * windiv2, (sx - windiv2 + 1) + (windiv2 ÷ 2))
+    #     fine_YI = LinRange(1, (1 - ol) * windiv2, (sy - windiv2 + 1) + (windiv2 ÷ 2))
+    # else
+    #     fine_XI = LinRange(1, (1 - ol) * windiv2, sx - (windiv2 + 1) + (windiv2 ÷ 2))
+    #     fine_YI = LinRange(1, (1 - ol) * windiv2, sy - (windiv2 + 1) + (windiv2 ÷ 2))
+    #     coarse_xs = copy(fine_XI)
+    #     coarse_ys = copy(fine_YI)
+    # end
+
+
     coarse_y_dim = size(data, 1)
     coarse_x_dim = size(data, 2)
 
