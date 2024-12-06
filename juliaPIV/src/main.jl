@@ -9,6 +9,77 @@ using Interpolations
 using Plots
 using Luxor            # For creating inpolygon() functionality
 
+
+# MAIN
+"""
+    main(image_pair::Tuple{Matrix{T}, Matrix{T}}) where {T}
+
+    Main Entry
+    Minimal PIV calculation for testing and development.
+    Run two images through the PIV process, eventually ending in the expected PIV
+    plots.
+    This should be the only public facing function in this library.
+    
+    Parameters
+    ----------
+
+    Returns
+    ----------
+
+"""
+function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32, 
+                                                    ol::Float32) where {T}
+    # Convert the images to matrices of floats
+    A = convert(Matrix{Float32}, image_pair[1])
+    B = convert(Matrix{Float32}, image_pair[2])
+
+    pass_sizes = zeros(Int32, 4)
+    try 
+        log2pivwin::Int32 = Int32(log2(final_win_size))
+        pass_sizes::Vector{Int32} = 2 .^ (Int32(6):-1:log2pivwin)
+        push!(pass_sizes, final_win_size) # Duplicate final element
+    catch 
+        InexactError
+        error("final_win_size must be factor of 2")
+    end
+
+    # other input params for piv
+    dt::Int32 = 1
+    overlap::Float32 = ol
+    validvec::Int32 = 3
+    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
+
+    # Reject data with too-low signal-to-noise level
+    snrthresh::Float32 = 1.3
+    u .= ifelse.(SnR .< snrthresh, NaN, u)
+    v .= ifelse.(SnR .< snrthresh, NaN, v)
+
+    # Reject data with too-low correlation peak height
+    pkhthresh::Float32 = 0.3
+    u .= ifelse.(Pkh .< pkhthresh, NaN, u)
+    v .= ifelse.(Pkh .< pkhthresh, NaN, v)
+
+    # Reject data that disagree strongly with their neighbors in a local window
+    u, v = globfilt(u, v)
+
+    return ((x, y), (u, v), pass_sizes)
+
+    # Plotting stuff
+    u_map = heatmap(u, 
+                    title = "u [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    limits=(0, 200), 
+                    xlimits=(0, 385))
+
+    v_map = heatmap(v, 
+                    title = "v [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    ylimits=(0, 200), 
+                    xlimits=(0, 385))
+    display(plot(u_map, v_map, layout = (2, 1)))
+    # png(dbl_plot, "../../tests/piv_testing/wbuildgrids1.png")    return "NaN count:  $(count(isnan, u)), $(count(isnan, v))"
+end
+
 # PASS FUNCTIONS 
 """
     multipassx(A::Matrix{Float32}, B::Matrix{Float32}, wins::Vector{Int32}, Dt::Int32, 
@@ -53,23 +124,21 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
         datay = floor.(datay)
 
         if i != total_passes - 1
-            Y, X, YI, XI = build_grids(overlap, sy, sx, wins[i])
+            Y, X, YI, XI = build_grids(overlap, sy, sx, wins[i], wins[end])
             # Y, X, YI, XI = build_grids_2(datax)
             datax = regular_interp(datax, X, Y, XI, YI)
             datay = regular_interp(datay, X, Y, XI, YI)
 
-            # NAN BORDER ATTEMPT ----------------
-            datax = make_nan_border(datax)
-            datay = make_nan_border(datay)
+            # datax = make_nan_border(datax)
+            # datay = make_nan_border(datay)
 
             datax, datay = linear_naninterp(datax, datay)
             datax = round.(datax)
             datay = round.(datay)
-            # ---------------------------------
         end
-        if i == 1
-            writedlm("../../tests/piv_testing/full_1stiterwzeroextp_datax.csv", datax, ',')
-        end
+        # if i == 1
+        #     writedlm("../../tests/piv_testing/julia_no_nanbord.csv", datax, ',')
+        # end
     end
 
     println("Final Pass")
@@ -632,18 +701,22 @@ end
 function regular_interp(samples::Matrix{Float32}, xs::T, ys::T, XI::T, YI::T) where {T}
     try
         itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
-        extp = Interpolations.extrapolate(itp, 0)
+        # Add 0 where extrapolation should be
+        extp = Interpolations.extrapolate(itp, 0)  
         # itp_results = [itp(yi, xi) for yi in YI, xi in XI]
 
         itp_results = zeros(Float32, (size(YI, 1), size(XI, 1)))
         for (j, yi) in enumerate(YI), (i, xi) in enumerate(XI)
+            # Extrapolate along the outside border
             if yi == YI[1] || xi == XI[1] || yi == YI[end] || xi == XI[end]
                 itp_results[j, i] = extp(yi, xi)
             else
+                # Otherwise, justi interpolate as usual
                 itp_results[j, i] = itp(yi, xi)
             end
         end
         return itp_results
+
     catch
         ys = collect(ys)  # Convert to an array to fit into deduplicate_knots!
         xs = collect(xs)
@@ -655,20 +728,32 @@ function regular_interp(samples::Matrix{Float32}, xs::T, ys::T, XI::T, YI::T) wh
     end
 end
 
-function build_grids(ol::Float32, sy::Int32, sx::Int32, win_size::Int32)
+function build_grids(ol::Float32, sy::Int32, sx::Int32, win_size::Int32, final_win::Int32)
     windiv2 = win_size ÷ 2
-    if win_size != 16
-        coarse_xs = windiv2 + 1:((1 - ol) * 2 * windiv2): sx - 2 * (windiv2 + 1) + win_size
-        coarse_ys = windiv2 + 1:((1 - ol) * 2 * windiv2): sy - 2 * (windiv2 + 1) + win_size
-        fine_XI = (windiv2 ÷ 2) + 1:((1 - ol) * windiv2): sx - (windiv2 + 1) + windiv2
-        fine_YI = (windiv2 ÷ 2) + 1:((1 - ol) * windiv2): sy - (windiv2 + 1) + windiv2
+    coarse_step = (1 - ol) * 2 * windiv2
+    fine_step = (1 - ol) * windiv2
+
+    if win_size != final_win
+        coarse_xs = windiv2 + 1:coarse_step:(sx - windiv2) + 1
+        coarse_ys = windiv2 + 1:coarse_step:(sy - windiv2) + 1
+        fine_XI = (windiv2 ÷ 2) + 1:fine_step: (sx - windiv2 ÷ 2) + 1 
+        fine_YI = (windiv2 ÷ 2) + 1:fine_step: (sy - windiv2 ÷ 2) + 1
     else
-        # Will need adjusting below
-        fine_XI = 1:((1 - ol) * windiv2): sx - (windiv2 + 1) + windiv2 ÷ 2
-        fine_YI = 1:((1 - ol) * windiv2): sy - (windiv2 + 1) + windiv2 ÷ 2
+        # Will need adjusting below? Neither mlab nor julia enter this branch?
+        fine_XI = 1:fine_step: sx - (windiv2 + 1) + windiv2 ÷ 2
+        fine_YI = 1:fine_step: sy - (windiv2 + 1) + windiv2 ÷ 2
         coarse_xs = copy(fine_XI)
         coarse_ys = copy(fine_YI)
     end
+
+    # Adjust for odd crops
+    if coarse_xs[end] < (sx - windiv2)
+        coarse_xs = windiv2 + 1:coarse_step:(sx - windiv2) + windiv2 + 1 
+    end
+    if coarse_ys[end] < (sy - windiv2)
+        coarse_ys = windiv2 + 1:coarse_step:(sy - windiv2) + windiv2 + 1
+    end
+
     return coarse_ys, coarse_xs, fine_YI, fine_XI
 end
 """
@@ -1117,85 +1202,12 @@ function fast_max!(max_coords::Vector{NTuple{2, Float32}}, collection::Matrix{Fl
     return max_coords
 end
 
-
-# MAIN
-"""
-    main(image_pair::Tuple{Matrix{T}, Matrix{T}}) where {T}
-
-    Main Entry
-    Minimal PIV calculation for testing and development.
-    Run two images through the PIV process, eventually ending in the expected PIV
-    plots.
-    This should be the only public facing function in this library.
-    
-    Parameters
-    ----------
-
-    Returns
-    ----------
-
-"""
-function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32, 
-                                                    ol::Float32) where {T}
-    # Convert the images to matrices of floats
-    A = convert(Matrix{Float32}, image_pair[1])
-    B = convert(Matrix{Float32}, image_pair[2])
-
-    pass_sizes = zeros(Int32, 4)
-    try 
-        log2pivwin::Int32 = Int32(log2(final_win_size))
-        pass_sizes::Vector{Int32} = 2 .^ (Int32(6):-1:log2pivwin)
-        push!(pass_sizes, final_win_size) # Duplicate final element
-    catch 
-        InexactError
-        error("final_win_size must be factor of 2")
-    end
-
-    # other input params for piv
-    dt::Int32 = 1
-    overlap::Float32 = ol
-    validvec::Int32 = 3
-    x, y, u, v, SnR, Pkh = multipassx(A, B, pass_sizes, dt, overlap, validvec)
-
-    # Reject data with too-low signal-to-noise level
-    snrthresh::Float32 = 1.3
-    u .= ifelse.(SnR .< snrthresh, NaN, u)
-    v .= ifelse.(SnR .< snrthresh, NaN, v)
-
-    # Reject data with too-low correlation peak height
-    pkhthresh::Float32 = 0.3
-    u .= ifelse.(Pkh .< pkhthresh, NaN, u)
-    v .= ifelse.(Pkh .< pkhthresh, NaN, v)
-
-    # Reject data that disagree strongly with their neighbors in a local window
-    u, v = globfilt(u, v)
-
-    # return ((x, y), (u, v), pass_sizes)
-
-    # Plotting stuff
-    u_map = heatmap(u, 
-                    title = "u [pixels/frame]", 
-                    aspect_ratio = :equal, 
-                    limits=(0, 200), 
-                    xlimits=(0, 385))
-
-    v_map = heatmap(v, 
-                    title = "v [pixels/frame]", 
-                    aspect_ratio = :equal, 
-                    ylimits=(0, 200), 
-                    xlimits=(0, 385))
-    dbl_plot = plot(u_map, v_map, layout = (2, 1))
-    # png(dbl_plot, "../../tests/piv_testing/wbuildgrids1.png")
-
-end
-
-function timed_main()
+function run_main()
     im1::Matrix{Gray{N0f8}} = load("../data/im1.jpg")
     im2::Matrix{Gray{N0f8}} = load("../data/im2.jpg")
-    # crops = (24, 2424, 1, 2048)
-    # im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
-    # im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
-    im_pair = (Gray.(im1), Gray.(im2))
+    crops = (24, 2425, 1, 2048)
+    im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
+    im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
 
-    main(im_pair, Int32(16), Float32(0.5))
+    main((im1, im2), Int32(16), Float32(0.5))
 end
