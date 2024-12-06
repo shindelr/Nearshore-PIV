@@ -53,8 +53,8 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
         datay = floor.(datay)
 
         if i != total_passes - 1
-            # Y, X, YI, XI = build_grids_2(datax, overlap, sy, sx, wins[i])
-            Y, X, YI, XI = build_grids_2(datax)
+            Y, X, YI, XI = build_grids(overlap, sy, sx, wins[i])
+            # Y, X, YI, XI = build_grids_2(datax)
             datax = regular_interp(datax, X, Y, XI, YI)
             datay = regular_interp(datay, X, Y, XI, YI)
 
@@ -66,6 +66,9 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
             datax = round.(datax)
             datay = round.(datay)
             # ---------------------------------
+        end
+        if i == 1
+            writedlm("../../tests/piv_testing/full_1stiterwzeroextp_datax.csv", datax, ',')
         end
     end
 
@@ -629,9 +632,19 @@ end
 function regular_interp(samples::Matrix{Float32}, xs::T, ys::T, XI::T, YI::T) where {T}
     try
         itp = Interpolations.interpolate((ys, xs), samples, Gridded(Linear()))
-        itp_results = [itp(yi, xi) for yi in YI, xi in XI]
+        extp = Interpolations.extrapolate(itp, 0)
+        # itp_results = [itp(yi, xi) for yi in YI, xi in XI]
+
+        itp_results = zeros(Float32, (size(YI, 1), size(XI, 1)))
+        for (j, yi) in enumerate(YI), (i, xi) in enumerate(XI)
+            if yi == YI[1] || xi == XI[1] || yi == YI[end] || xi == XI[end]
+                itp_results[j, i] = extp(yi, xi)
+            else
+                itp_results[j, i] = itp(yi, xi)
+            end
+        end
         return itp_results
-    catch e
+    catch
         ys = collect(ys)  # Convert to an array to fit into deduplicate_knots!
         xs = collect(xs)
         knots = (ys, xs)
@@ -642,6 +655,22 @@ function regular_interp(samples::Matrix{Float32}, xs::T, ys::T, XI::T, YI::T) wh
     end
 end
 
+function build_grids(ol::Float32, sy::Int32, sx::Int32, win_size::Int32)
+    windiv2 = win_size ÷ 2
+    if win_size != 16
+        coarse_xs = windiv2 + 1:((1 - ol) * 2 * windiv2): sx - 2 * (windiv2 + 1) + win_size
+        coarse_ys = windiv2 + 1:((1 - ol) * 2 * windiv2): sy - 2 * (windiv2 + 1) + win_size
+        fine_XI = (windiv2 ÷ 2) + 1:((1 - ol) * windiv2): sx - (windiv2 + 1) + windiv2
+        fine_YI = (windiv2 ÷ 2) + 1:((1 - ol) * windiv2): sy - (windiv2 + 1) + windiv2
+    else
+        # Will need adjusting below
+        fine_XI = 1:((1 - ol) * windiv2): sx - (windiv2 + 1) + windiv2 ÷ 2
+        fine_YI = 1:((1 - ol) * windiv2): sy - (windiv2 + 1) + windiv2 ÷ 2
+        coarse_xs = copy(fine_XI)
+        coarse_ys = copy(fine_YI)
+    end
+    return coarse_ys, coarse_xs, fine_YI, fine_XI
+end
 """
         build_grids_2(data)
 
@@ -659,20 +688,6 @@ end
     `fine_XI`: A 1-dimensional array representing the fine grid in the x-direction.
 """
 function build_grids_2(data::Matrix{Float32})
-# function build_grids_2(data::Matrix{Float32}, ol, sy, sx, win_size)
-    # windiv2 = win_size ÷ 2
-    # if win_size != 16
-    #     coarse_xs = LinRange(1, (1 - ol) * 2 * windiv2 + 1, sx - 2 * windiv2 + windiv2)
-    #     coarse_ys = LinRange(1, (1 - ol) * 2 * windiv2 + 1, sy - 2 * windiv2 + windiv2)
-    #     fine_XI = LinRange(1, (1 - ol) * windiv2, (sx - windiv2 + 1) + (windiv2 ÷ 2))
-    #     fine_YI = LinRange(1, (1 - ol) * windiv2, (sy - windiv2 + 1) + (windiv2 ÷ 2))
-    # else
-    #     fine_XI = LinRange(1, (1 - ol) * windiv2, sx - (windiv2 + 1) + (windiv2 ÷ 2))
-    #     fine_YI = LinRange(1, (1 - ol) * windiv2, sy - (windiv2 + 1) + (windiv2 ÷ 2))
-    #     coarse_xs = copy(fine_XI)
-    #     coarse_ys = copy(fine_YI)
-    # end
-
 
     coarse_y_dim = size(data, 1)
     coarse_x_dim = size(data, 2)
@@ -1170,16 +1185,16 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
                     ylimits=(0, 200), 
                     xlimits=(0, 385))
     dbl_plot = plot(u_map, v_map, layout = (2, 1))
-    # png(dbl_plot, "../../tests/gpu_tests/replaaace me .png")
+    # png(dbl_plot, "../../tests/piv_testing/wbuildgrids1.png")
 
 end
 
 function timed_main()
     im1::Matrix{Gray{N0f8}} = load("../data/im1.jpg")
     im2::Matrix{Gray{N0f8}} = load("../data/im2.jpg")
-    crops = (24, 2424, 1, 2048)
-    im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
-    im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
+    # crops = (24, 2424, 1, 2048)
+    # im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
+    # im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
     im_pair = (Gray.(im1), Gray.(im2))
 
     main(im_pair, Int32(16), Float32(0.5))
