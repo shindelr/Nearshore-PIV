@@ -8,7 +8,7 @@ using DelimitedFiles  # Write matrices to CSV
 using Interpolations
 using Plots
 using Luxor            # For creating inpolygon() functionality
-include("./threaded_1stpass.jl")
+# include("./threaded_1stpass.jl")
 
 # MAIN
 """
@@ -64,8 +64,6 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
 
     # return ((x, y), (u, v), pass_sizes)
 
-    @show count(isnan.(u))
-
     # Plotting stuff
     u_map = heatmap(u, 
                     title = "u [pixels/frame]", 
@@ -120,7 +118,7 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
         println("Pass ", i, " of ", total_passes)
         x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
         # @time x, y, datax, datay = threaded_firstpass(A, B, wins[i], overlap, datax, datay)
-        display(datax)
+        # display(datax)
         
         datax, datay = localfilt(x, y, datax, datay, sensit)
         datax, datay = linear_naninterp(datax, datay)
