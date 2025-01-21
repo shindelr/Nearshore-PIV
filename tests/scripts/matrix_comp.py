@@ -51,7 +51,7 @@ def round_vals(val):
     """
     Round values to a specific number of significant digits.  
     """
-    return round(val, 8)
+    return round(val, 5)
 
 def parse_im(val):
     """
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     # -im       Parses complex numbers
     # -rim      Round complex numbers to 11 sigs
     # -s        Saves dataframes as csv
-    # -r        Round to 11 significant figures
+    # -r        Round to 8 significant figures
     flags = [str(elem) for elem in sys.argv[3:]]
 
     df1, df2, names = load_data(sys.argv[1:3])

@@ -26,13 +26,13 @@ function display_3d(path, title)
 end
 
 
-path = "tests/juliaOut/datax_pass_1.csv"
-title = "Julia datax_pass_1"
+path = "../../tests/piv_testing/ju"
+title = "Julia datax no nan border"
 
 display_heatmap(path, title)
 
-path = "tests/mlabOut/datax1.csv"
-title = "Mlab datax1"
+path = "../../tests/piv_testing/mlab_1stfulliter_datax.csv"
+title = "Mlab datax 1st iter"
 
 display_heatmap(path, title)
 # display_3d(path, title)

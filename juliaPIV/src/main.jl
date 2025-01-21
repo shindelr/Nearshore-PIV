@@ -8,7 +8,7 @@ using DelimitedFiles  # Write matrices to CSV
 using Interpolations
 using Plots
 using Luxor            # For creating inpolygon() functionality
-
+include("./threaded_1stpass.jl")
 
 # MAIN
 """
@@ -62,7 +62,9 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
 
-    return ((x, y), (u, v), pass_sizes)
+    # return ((x, y), (u, v), pass_sizes)
+
+    @show count(isnan.(u))
 
     # Plotting stuff
     u_map = heatmap(u, 
@@ -117,6 +119,9 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
         # i = 1
         println("Pass ", i, " of ", total_passes)
         x, y, datax, datay = firstpass(A, B, wins[i], overlap, datax, datay)
+        # @time x, y, datax, datay = threaded_firstpass(A, B, wins[i], overlap, datax, datay)
+        display(datax)
+        
         datax, datay = localfilt(x, y, datax, datay, sensit)
         datax, datay = linear_naninterp(datax, datay)
 
@@ -136,9 +141,6 @@ function multipassx(A::Matrix{T}, B::Matrix{T}, wins::Vector{Int32}, Dt::Int32,
             datax = round.(datax)
             datay = round.(datay)
         end
-        # if i == 1
-        #     writedlm("../../tests/piv_testing/julia_no_nanbord.csv", datax, ',')
-        # end
     end
 
     println("Final Pass")

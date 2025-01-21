@@ -10,7 +10,7 @@ ol=0.5
 out_dir="tests/pipeline_utility_testing/SVSout_23227179_1724441851/pivframes/"
 
 # SINGLE BATCH
-in_path="tests/pipeline_utility_testing/testbatches/tmp.7EOJPExxgd.txt"
+in_path="tests/pipeline_utility_testing/testbatches/tmp.eT30jRtvHl.txt"
 
 # MULTI BATCH
 # in_dir="tests/pipeline_utility_testing/testbatches/"

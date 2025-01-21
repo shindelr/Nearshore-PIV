@@ -27,6 +27,7 @@ function get_raw_images(path::String)::Vector{String}
     prefix_dir = dirname(dirname(path))
     # Get raw images and prepend the test directory
     return ["$prefix_dir/$file" for file in files]
+    # return ["$file" for file in files]
 end
 
 """
