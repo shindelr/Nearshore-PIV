@@ -12,3 +12,4 @@ Pkg.instantiate();
 '
 
 echo "Environment setup complete"
+echo "Manually start a REPL with:   julia --project=. "
