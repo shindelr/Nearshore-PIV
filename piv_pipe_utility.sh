@@ -19,7 +19,7 @@ in_path="tests/pipeline_utility_testing/testbatches/tmp.eT30jRtvHl.txt"
 verbose=1
 
 # Path to julia script
-exec_path="/Users/robinshindelman/repos/Nearshore-Research/juliaPIV/src/io.jl"
+exec_path="/Users/robinshindelman/repos/Nearshore-Research/juliaPIV/src/PIVPipelineUtility.jl"
 
 # Run julia script
 # julia $exec_path $N $crop_factor $final_win_size $ol $out_dir $in_dir $verbose $multi_batch

@@ -1,4 +1,3 @@
-
 # Third party modules
 using Statistics
 using FFTW            # Fast Fourier Transforms library built on C
@@ -62,22 +61,22 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
 
-    # return ((x, y), (u, v), pass_sizes)
+    return ((x, y), (u, v), pass_sizes)
 
-    # Plotting stuff
-    u_map = heatmap(u, 
-                    title = "u [pixels/frame]", 
-                    aspect_ratio = :equal, 
-                    limits=(0, 200), 
-                    xlimits=(0, 385))
+    # # Plotting stuff
+    # u_map = heatmap(u, 
+    #                 title = "u [pixels/frame]", 
+    #                 aspect_ratio = :equal, 
+    #                 limits=(0, 200), 
+    #                 xlimits=(0, 385))
 
-    v_map = heatmap(v, 
-                    title = "v [pixels/frame]", 
-                    aspect_ratio = :equal, 
-                    ylimits=(0, 200), 
-                    xlimits=(0, 385))
-    display(plot(u_map, v_map, layout = (2, 1)))
-    # png(dbl_plot, "../../tests/piv_testing/wbuildgrids1.png")    return "NaN count:  $(count(isnan, u)), $(count(isnan, v))"
+    # v_map = heatmap(v, 
+    #                 title = "v [pixels/frame]", 
+    #                 aspect_ratio = :equal, 
+    #                 ylimits=(0, 200), 
+    #                 xlimits=(0, 385))
+    # dbl_plot = plot(u_map, v_map, layout = (2, 1))
+    # png(dbl_plot, "../../tests/piv_testing/results_out.png")
 end
 
 # PASS FUNCTIONS 
@@ -1202,7 +1201,7 @@ function fast_max!(max_coords::Vector{NTuple{2, Float32}}, collection::Matrix{Fl
     return max_coords
 end
 
-function run_main()
+function run_test_data()
     im1::Matrix{Gray{N0f8}} = load("../data/im1.jpg")
     im2::Matrix{Gray{N0f8}} = load("../data/im2.jpg")
     crops = (24, 2425, 1, 2048)
