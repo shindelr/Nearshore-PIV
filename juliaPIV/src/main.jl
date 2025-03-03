@@ -1202,8 +1202,8 @@ function fast_max!(max_coords::Vector{NTuple{2, Float32}}, collection::Matrix{Fl
 end
 
 function run_test_data()
-    im1::Matrix{Gray{N0f8}} = load("../data/im1.jpg")
-    im2::Matrix{Gray{N0f8}} = load("../data/im2.jpg")
+    im1::Matrix{Gray{N0f8}} = load("data/im1.jpg")
+    im2::Matrix{Gray{N0f8}} = load("data/im2.jpg")
     crops = (24, 2425, 1, 2048)
     im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
     im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
