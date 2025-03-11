@@ -6,7 +6,7 @@ using FileIO
 using Images
 using Statistics
 using MAT
-include("main.jl")
+include("./main.jl")
 # using .JuliaPIV
 
 """
@@ -24,10 +24,12 @@ include("main.jl")
 """
 function get_raw_images(path::String)::Vector{String}
     files::Vector{String} = readlines(path)
-    prefix_dir = dirname(dirname(path))
-    # Get raw images and prepend the test directory
-    return ["$prefix_dir/$file" for file in files]
-    # return ["$file" for file in files]
+    abs_paths = [abspath(joinpath(@__DIR__, file)) for file in files]
+    return abs_paths
+
+    # prefix_dir = dirname(dirname(path))
+    # # Get raw images and prepend the test directory
+    # return ["$prefix_dir/$file" for file in files]
 end
 
 """
@@ -373,7 +375,7 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
         cropped_pairs = crop_and_pair_images(images, crop_factor)
         @assert length(cropped_pairs) == length(images) ÷ 2 "Length of cropped pairs should be half the length of images"
         Threads.@threads for pair in cropped_pairs
-            push!(raw_piv_results, JuliaPIV.main(pair, Int32(final_win_size), Float32(ol)))
+            push!(raw_piv_results, main(pair, Int32(final_win_size), Float32(ol)))
         end
         # PIV stats
         ((x_avs, y_avs),
@@ -601,7 +603,7 @@ end
         - `Cint`: 0 if successful, 1 if unsuccessful.
 
 """
-function julia_main()::Cint
+function julia_main()
     # Check on ARGS
     if length(ARGS) == 7
         N, crop_factors, final_win_size, ol, out_dir, in_path, verbose = parse_seven_args()
@@ -639,5 +641,5 @@ function julia_main()::Cint
     return 0
 end
 
-# julia_main()
+julia_main()
 # end

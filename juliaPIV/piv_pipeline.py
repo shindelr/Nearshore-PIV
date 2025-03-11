@@ -13,16 +13,17 @@ import subprocess
 def run_pipe(args):
     # Nifty way of getting absolute path of the script to run, regardless of cwd
     exec_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'src/PIVPipelineUtility.jl'))
-    cmmd = ['julia --project=.', 
+    cmmd = ['julia',
+            '--project',
+            '-t 4',
             exec_path,
-            f'{args.N}',
-            f'{args.crop_factor}', 
-            f'{args.final_win_size}', 
-            f'{args.ol}', 
-            f'{args.out}', 
-            f'{args.in_path}', 
-            f'{args.verbosity}']
-            
+            str(args.N),
+            str(args.crop_factor), 
+            str(args.final_win_size), 
+            str(args.ol), 
+            args.out, 
+            args.in_path, 
+            str(args.verbosity)]
     subprocess.run(cmmd)
 
 def main():
@@ -52,7 +53,7 @@ pass_sizes: [3x2 double]
                         default=2)
     parser.add_argument('--crop_factor',
                         help='Gives a box to extract from the raw image. Should be a tuple of 4 ints',
-                        default="24, 2424, 1, 2048")
+                        default="24, 2425, 1, 2048")
     parser.add_argument('--final_win_size',
                         help='Final window size to evaluate PIV at.',
                         type=int,

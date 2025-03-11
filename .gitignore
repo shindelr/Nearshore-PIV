@@ -8,3 +8,6 @@ tests/test_data/
 tests/pipeline_utility_testing/
 tests/piv_testing
 matlabPIV/
+.venv/
+.vscode/
+greg_utilities/
