@@ -1,0 +1,13 @@
+CONFIG = asset_catalogs rez $$CONFIG
+load(default_pre)
+
+QMAKE_ASSET_CATALOGS_APP_ICON = AppIcon
+
+macx-xcode:qtConfig(static): \
+    QMAKE_XCODE_DEBUG_INFORMATION_FORMAT = dwarf
+
+QMAKE_XCODE_LIBRARY_SUFFIX_SETTING = QT_LIBRARY_SUFFIX
+
+xcode_copy_phase_strip_setting.name = COPY_PHASE_STRIP
+xcode_copy_phase_strip_setting.value = NO
+QMAKE_MAC_XCODE_SETTINGS += xcode_copy_phase_strip_setting

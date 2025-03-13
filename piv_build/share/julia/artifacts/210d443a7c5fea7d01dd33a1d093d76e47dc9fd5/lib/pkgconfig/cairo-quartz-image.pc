@@ -1,0 +1,10 @@
+prefix=/workspace/destdir
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: cairo-quartz-image
+Description: Quartz Image surface backend for cairo graphics library
+Version: 1.18.3
+Requires: cairo
+Libs: -framework CoreFoundation -framework ApplicationServices
+Cflags: -I${includedir}

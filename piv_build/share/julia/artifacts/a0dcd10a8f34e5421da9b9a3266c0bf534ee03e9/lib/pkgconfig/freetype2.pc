@@ -1,0 +1,14 @@
+prefix=${pcfiledir}/../..
+exec_prefix=/workspace/destdir
+libdir=/workspace/destdir/lib
+includedir=/workspace/destdir/include
+
+Name: FreeType 2
+URL: https://freetype.org
+Description: A free, high-quality, and portable font engine.
+Version: 26.2.20
+Requires: 
+Requires.private: zlib, bzip2
+Libs: -L/workspace/destdir/lib -lfreetype
+Libs.private: 
+Cflags: -I${includedir}/freetype2

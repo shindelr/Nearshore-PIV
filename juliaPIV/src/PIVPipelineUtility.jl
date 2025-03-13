@@ -1,5 +1,5 @@
-# module PIVPipelineUtility
-# export julia_main 
+module PIVPipelineUtility
+# export julia_main
 
 using Base.Threads
 using FileIO
@@ -24,12 +24,12 @@ include("./main.jl")
 """
 function get_raw_images(path::String)::Vector{String}
     files::Vector{String} = readlines(path)
-    abs_paths = [abspath(joinpath(@__DIR__, file)) for file in files]
-    return abs_paths
+    # abs_paths = [abspath(joinpath(@__DIR__, file)) for file in files]
+    # return abs_paths
 
-    # prefix_dir = dirname(dirname(path))
-    # # Get raw images and prepend the test directory
-    # return ["$prefix_dir/$file" for file in files]
+    prefix_dir = dirname(dirname(path))
+    # Get raw images and prepend the test directory
+    return ["$prefix_dir/$file" for file in files]
 end
 
 """
@@ -332,6 +332,7 @@ function parse_image_names(images::Vector{String}, N::Int32)::Vector{Vector{Stri
     for group in Iterators.partition(image_names, N)
         push!(image_groups, group)
     end
+
     return image_groups
 end
 
@@ -642,4 +643,4 @@ function julia_main()
 end
 
 julia_main()
-# end
+end

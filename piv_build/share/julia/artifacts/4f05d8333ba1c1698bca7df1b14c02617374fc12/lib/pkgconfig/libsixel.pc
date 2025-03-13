@@ -1,0 +1,11 @@
+prefix=${pcfiledir}/../..
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: libsixel
+Description: A lightweight, fast C implementation of DEC SIXEL graphics codec
+Version: 1.10.5
+Requires.private: libjpeg, libpng
+Libs: -L${libdir} -lsixel
+Libs.private: -lm
+Cflags: -I${includedir}

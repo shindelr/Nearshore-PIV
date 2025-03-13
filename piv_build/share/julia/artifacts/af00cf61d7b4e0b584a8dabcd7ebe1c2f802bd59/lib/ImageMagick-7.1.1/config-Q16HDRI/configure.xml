@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE configuremap [
+  <!ELEMENT configuremap (configure)+>
+  <!ATTLIST configuremap xmlns CDATA #FIXED ''>
+  <!ELEMENT configure EMPTY>
+  <!ATTLIST configure xmlns CDATA #FIXED '' name NMTOKEN #REQUIRED
+    value CDATA #REQUIRED>
+]>
+<!--
+  ImageMagick build configuration.
+-->
+<configuremap>
+  <configure name="CC" value="cc"/>
+  <configure name="CFLAGS" value="-I/workspace/destdir/include -I/workspace/destdir/include/libpng16 -I/workspace/destdir/include -I/workspace/destdir/include/openjpeg-2.4 -I/workspace/destdir/include -I/workspace/destdir/include -Wall -g -O2 -fexceptions -D_FORTIFY_SOURCE=0 -pthread -DMAGICKCORE_HDRI_ENABLE=1 -DMAGICKCORE_QUANTUM_DEPTH=16 -I/workspace/destdir/include -DMAGICKCORE_CHANNEL_MASK_DEPTH=32"/>
+  <configure name="CHANNEL_MASK_DEPTH" value="32"/>
+  <configure name="CODER_PATH" value="/workspace/destdir/lib/ImageMagick-7.1.1/modules-Q16HDRI/coders"/>
+  <configure name="CONFIGURE_PATH" value="/workspace/destdir/etc/ImageMagick-7/"/>
+  <configure name="CONFIGURE" value="./configure  '--prefix=/workspace/destdir' '--build=x86_64-linux-musl' '--host=aarch64-apple-darwin20' '--without-x' '--disable-openmp' '--disable-installed' '--disable-dependency-tracking' '--without-frozenpaths' '--without-perl' '--disable-docs' '--disable-static' '--with-gslib' 'build_alias=x86_64-linux-musl' 'host_alias=aarch64-apple-darwin20' 'CC=cc' 'CXX=c++' 'PKG_CONFIG_PATH=/workspace/destdir/lib/pkgconfig:/workspace/destdir/lib64/pkgconfig:/workspace/destdir/share/pkgconfig'"/>
+  <configure name="COPYRIGHT" value="Copyright (C) 1999 ImageMagick Studio LLC"/>
+  <configure name="CPPFLAGS" value="-I/workspace/destdir/include/ImageMagick-7"/>
+  <configure name="CXXFLAGS" value="-g -O2 -pthread"/>
+  <configure name="CXX" value="c++"/>
+  <configure name="DEFS" value="-DHAVE_CONFIG_H"/>
+  <configure name="DELEGATES" value="bzlib gslib jng jp2 jpeg lcms png ps tiff zlib zstd"/>
+  <configure name="DISTCHECK_CONFIG_FLAGS" value="'CC=cc' 'CXX=c++'  --disable-deprecated  --disable-installed  --with-quantum-depth=16  --with-jemalloc=no  --with-umem=no  --with-autotrace=no  --with-dps=no  --with-fftw=no  --with-flif=no  --with-fpx=no  --with-fontpath=  --with-rsvg=no  --with-uhdr=no  --with-wmf=no  --with-perl=no "/>
+  <configure name="DOCUMENTATION_PATH" value="/workspace/destdir/share/doc/ImageMagick-7"/>
+  <configure name="EXEC-PREFIX" value="/workspace/destdir"/>
+  <configure name="EXECUTABLE_PATH" value="/workspace/destdir/bin"/>
+  <configure name="FEATURES" value="Channel-masks(32-bit) Cipher DPC HDRI"/>
+  <configure name="FILTER_PATH" value="/workspace/destdir/lib/ImageMagick-7.1.1/modules-Q16HDRI/filters"/>
+  <configure name="GIT_REVISION" value="21316" />
+  <configure name="HOST" value="aarch64-apple-darwin20"/>
+  <configure name="INCLUDE_PATH" value="/workspace/destdir/include/ImageMagick-7"/>
+  <configure name="LDFLAGS" value="-L/workspace/destdir/lib "/>
+  <configure name="LIBRARY_PATH" value="/workspace/destdir/lib/ImageMagick-7.1.1"/>
+  <configure name="LIBS" value="  -L/workspace/destdir/lib -llcms2   -L/workspace/destdir/lib -ltiff    -ljpeg  -lgs  -L/workspace/destdir/lib -lpng16                  -lbz2  -L/workspace/destdir/lib -lopenjp2       -L/workspace/destdir/lib -lz      -lm    -lpthread    "/>
+  <configure name="LIB_VERSION_NUMBER" value="7,1,1,31"/>
+  <configure name="LIB_VERSION" value="0x711"/>
+  <configure name="NAME" value="ImageMagick"/>
+  <configure name="PCFLAGS" value="-DMAGICKCORE_HDRI_ENABLE=1 -DMAGICKCORE_QUANTUM_DEPTH=16 -DMAGICKCORE_CHANNEL_MASK_DEPTH=32"/>
+  <configure name="PREFIX" value="/workspace/destdir"/>
+  <configure name="QuantumDepth" value="16"/>
+  <configure name="RELEASE_DATE" value="2024-04-21"/>
+  <configure name="SECURITY_POLICY" value="open"/>
+  <configure name="SHAREARCH_PATH" value="/workspace/destdir/lib/ImageMagick-7.1.1/config-Q16HDRI"/>
+  <configure name="SHARE_PATH" value="/workspace/destdir/share/ImageMagick-7"/>
+  <configure name="TARGET_CPU" value="aarch64"/>
+  <configure name="TARGET_OS" value="darwin20"/>
+  <configure name="TARGET_VENDOR" value="apple"/>
+  <configure name="VERSION" value="7.1.1"/>
+  <configure name="WEBSITE" value="https://imagemagick.org"/>
+</configuremap>

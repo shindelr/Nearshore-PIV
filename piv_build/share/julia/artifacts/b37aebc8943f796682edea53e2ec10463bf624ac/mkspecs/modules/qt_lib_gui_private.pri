@@ -1,0 +1,17 @@
+QT.gui_private.VERSION = 5.15.3
+QT.gui_private.name = QtGui
+QT.gui_private.module =
+QT.gui_private.libs = $$QT_MODULE_LIB_BASE
+QT.gui_private.includes = $$QT_MODULE_LIB_BASE/QtGui.framework/Headers/5.15.3 $$QT_MODULE_LIB_BASE/QtGui.framework/Headers/5.15.3/QtGui
+QT.gui_private.frameworks =
+QT.gui_private.depends = core_private gui
+QT.gui_private.uses =
+QT.gui_private.module_config = v2 lib_bundle internal_module
+QT.gui_private.enabled_features = freetype gif harfbuzz ico imageio-text-loading jpeg multiprocess png raster-64bit system-freetype tuiotouch vkgen
+QT.gui_private.disabled_features = xcb accessibility-atspi-bridge angle_d3d11_qdtd direct2d direct2d1_1 dxgi direct3d11 direct3d11_1 direct3d9 directfb drm_atomic dxgi1_2 dxguid egl egl_x11 eglfs eglfs_brcm eglfs_egldevice eglfs_gbm eglfs_mali eglfs_openwfd eglfs_rcar eglfs_viv eglfs_viv_wl eglfs_vsp2 eglfs_x11 evdev fontconfig integrityfb integrityhid kms libinput libinput-axis-api linuxfb mtdev system-harfbuzz system-jpeg system-png tslib vnc vsp2 xlib xcb-xlib xkbcommon xkbcommon-x11
+QMAKE_INCDIR_OPENGL = /System/Library/Frameworks/OpenGL.framework/Headers /System/Library/Frameworks/AGL.framework/Headers/
+QMAKE_DEPENDS_FREETYPE_CC = ZLIB
+QMAKE_DEPENDS_FREETYPE_LD = ZLIB
+QMAKE_INCDIR_FREETYPE = /opt/aarch64-apple-darwin20/aarch64-apple-darwin20/sys-root/usr/local/include/freetype2
+QMAKE_LIBS_OPENGL = -framework OpenGL -framework AGL
+QMAKE_LIBS_FREETYPE = -lfreetype
