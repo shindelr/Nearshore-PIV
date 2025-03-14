@@ -1,7 +1,0 @@
-
-datadir=/workspace/destdir/share
-xkb_base=/workspace/destdir/share/X11/xkb
-
-Name: XKeyboardConfig
-Description: X Keyboard configuration data
-Version: 2.39
