@@ -5,3 +5,5 @@ Welcome to the CEOAS Coastal Imaging Lab's RGB video PIV arm of the ROXSI proces
 The original PIV software for this package, written in Matlab can be learned more about in the .pdf in the root directory of this repo titled "An_introduction_to_MatPIV_v_161.pdf".
 
 By switching this process over to Julia, the execution time of processing a single pair of images improved by roughly 50%. Some improvements were made by tuning the overall algorithm and trimming unnecessary code. However, the majority of speed-up came from Julia's JIT compilation, typing, and some memory management since PIV is quite dependent on large arrays. 
+
+Instructions for using the pipeline are included in a README file in each release.
