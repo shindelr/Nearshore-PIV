@@ -5,9 +5,12 @@ TODO.txt
 tests/juliaOut/
 tests/mlabOut/
 tests/test_data/
-tests/pipeline_utility_testing/
 tests/piv_testing
 matlabPIV/
 .venv/
 .vscode/
 greg_utilities/
+PIVPipelineUtility/
+piv_build/
+piv_build.zip
+tests/pipeline_utility_testing/
