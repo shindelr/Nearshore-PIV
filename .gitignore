@@ -1,6 +1,6 @@
 pivdemo.zip
 Matlab\ Intro/
-scratch/
+# scratch/
 TODO.txt
 tests/juliaOut/
 tests/mlabOut/
@@ -14,4 +14,6 @@ PIVPipelineUtility/
 piv_build/
 piv_build.zip
 tests/pipeline_utility_testing/
+tests/gpu_tests
+pipeline_utility_testing/
 matlabPIV/
