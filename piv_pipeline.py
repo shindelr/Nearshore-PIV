@@ -1,4 +1,4 @@
-#!/Users/robinshindelman/repos/Nearshore-Research/.venv/bin/python3
+#!/usr/bin/env python3
 """
 A script to run the Julia PIV portion of the pipeline.
 Uses 4 threads by default to make the comparison of frame pairs run a little 
@@ -81,10 +81,12 @@ pass_sizes: [3x2 double]
                         default=0.5)
     
     parser.add_argument('--out',
-                        help='Where to output .mat files')
+                        help='Where to output .mat files',
+                        required=True)
     
     parser.add_argument('--in_path',
-                        help='.txt file containing image paths.')
+                        help='.txt file containing image paths.',
+                        required=True)
     
     parser.add_argument('--verbosity', 
                         help='1 for verbose print statements, 0 otherwise.',
