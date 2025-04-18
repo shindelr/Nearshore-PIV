@@ -15,3 +15,7 @@ piv_build/
 piv_build.zip
 tests/pipeline_utility_testing/
 matlabPIV/
+latest-release/
+linux-release/
+tests/
+v1.0.0-ARM.zip
