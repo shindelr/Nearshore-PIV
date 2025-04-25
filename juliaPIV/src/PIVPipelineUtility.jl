@@ -417,8 +417,7 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
             "uStd" => u_stds[i],
             "vStd" => v_stds[i]
         )
-        MAT.matwrite("$out_dir$(image_groups_names[i][1]).mat", mat_dict)
-        println(keys(matread("$out_dir$(image_groups_names[i][1]).mat")))
+        MAT.matwrite("$out_dir/$(image_groups_names[i][1]).mat", mat_dict)
     end
 end
 
