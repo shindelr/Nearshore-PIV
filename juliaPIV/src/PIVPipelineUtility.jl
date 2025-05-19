@@ -1,6 +1,5 @@
 module PIVPipelineUtility
 
-# using Base.Threads
 using FileIO
 using Images
 using Statistics
@@ -8,8 +7,8 @@ using MAT
 include("./main.jl")
 
 # Remove before compiling! -----------------------------------------------------
-const ARGS = ["5", "1, 3072, 1, 2048", "16", "0.5", 
-            "/home/server/pi/homes/shindelr/2023-test/piv-mat-out/custom-frame-verify/run3/",       # Output
+const ARGS = ["3", "1, 3072, 1, 2048", "16", "0.5", 
+            "/home/server/pi/homes/shindelr/2023-test/piv-mat-out/custom-frame-verify/run4/",       # Output
             "/home/server/pi/homes/shindelr/2023-test/custom-frame-verify-jpgs/custom-frame-verify.txt", "1"]   # Input
 
 """
@@ -100,7 +99,8 @@ function crop_and_group_images(images::Vector{String},
             img = load(img_name)
             img = img[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
             # Push images into their respective group
-            push!(group, Gray.(img)) 
+            # push!(group, Gray.(img)) 
+            push!(group, img) 
             j += 1
         end
         # Push groups into the final return vector
@@ -330,7 +330,6 @@ function grouped_piv(N::T, final_win_size::T, ol::Float32, out_dir::String,
     image_groups = crop_and_group_images(images, crop_factor, N)
     for group in image_groups
         for i in (1:length(group)-1)
-            println("Running PIV on $i -- $(i + 1)")
             push!(raw_piv_results, main((group[i], group[i+1]), Int32(final_win_size), Float32(ol)))
         end
     end
