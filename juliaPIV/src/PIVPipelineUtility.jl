@@ -1,5 +1,4 @@
 module PIVPipelineUtility
-# export julia_main
 
 using Base.Threads
 using FileIO
@@ -7,7 +6,6 @@ using Images
 using Statistics
 using MAT
 include("./main.jl")
-# using .JuliaPIV
 
 """
     get_raw_images(path::String)::Vector{String}
@@ -22,14 +20,10 @@ include("./main.jl")
     Returns:
         - `Vector{String}`: Vector of image names.
 """
-function get_raw_images(path::String)::Vector{String}
+function get_raw_images(path::String, N::Int32)::Vector{String}
     files::Vector{String} = readlines(path)
-    # abs_paths = [abspath(joinpath(@__DIR__, file)) for file in files]
-    # return abs_paths
-
-    prefix_dir = dirname(dirname(path))
-    # Get raw images and prepend the test directory
-    return ["$prefix_dir/$file" for file in files]
+    @assert length(files) % N == 0 "Number of files in batch ($(length(files))) should be divisible by N ($(N))" 
+    return files
 end
 
 """
@@ -332,7 +326,6 @@ function parse_image_names(images::Vector{String}, N::Int32)::Vector{Vector{Stri
     for group in Iterators.partition(image_names, N)
         push!(image_groups, group)
     end
-
     return image_groups
 end
 
@@ -367,7 +360,7 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
                              } where {T}}()
 
     # Image pre-processing
-    images = get_raw_images(in_path)
+    images = get_raw_images(in_path, N)
     if length(images) ÷ N <= 1
         error("\n\nNumber of images in directory ($(length(images))) not divisible by N ($N).\n\n")
     end
@@ -424,111 +417,8 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
             "uStd" => u_stds[i],
             "vStd" => v_stds[i]
         )
-        MAT.matwrite("$out_dir$(image_groups_names[i][1]).mat", mat_dict)
+        MAT.matwrite("$out_dir/$(image_groups_names[i][1]).mat", mat_dict)
     end
-end
-
-# MULTIBATCH
-"""
-    io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
-    ol::Float32, out_dir::String, in_dir::String, multi_batch::Int32) where {T}
-
-    Automatically run multiple batches of images through the Julia 
-    PIV algorithm.    
-
-    Arguments:
-        - `N::Int32`: Number of images in each subgroup to run PIV on.
-            Corresponds to the LiDAR scan rate.
-        - `crop_factor::Int32`: Tuple of 4 integers representing the 
-            cropping factor (left, right, top, bottom).
-        - `final_win_size::Int32`: Final window size for PIV.
-        - `ol::Float32`: Overlap percentage for PIV.
-        - `out_dir::String`: Directory to write .mat files to.
-        - `in_dir::String`: Path to the directory containing the batches.
-        - `multi_batch::Int32`: Flag to indicate multiple batches. Pass 1 
-            for multiple batches, 0 for single batch.
-    Returns:
-        None
-"""
-function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
-    ol::Float32, out_dir::String, in_dir::String, multi_batch::Int32) where {T}
-
-    batches::Vector{String} = readdir(in_dir)
-    mat_file_count = 0
-    
-    # Image pre-processing
-    for batch in batches
-        # Preallocate results from PIV
-        raw_piv_results = Vector{Tuple{
-                                Tuple{Matrix{T}, Matrix{T}}, 
-                                Tuple{Matrix{T}, Matrix{T}}, 
-                                Vector{Int32}
-                                } where {T}}()
-                  
-        # Get batch of raw images
-        in_path = "$in_dir$batch" 
-        images = get_raw_images(in_path)
-        if length(images) ÷ N <= 1
-            error("\n\nNumber of images in batch ($(length(images))) not divisible by N ($N).\n\n")
-        end
-
-        if N == 2
-            cropped_pairs = crop_and_pair_images(images, crop_factor)
-            @assert length(cropped_pairs) == length(images) ÷ 2 "Length of cropped pairs should be half the length of images"
-            Threads.@threads for pair in cropped_pairs
-                push!(raw_piv_results, JuliaPIV.main(pair, Int32(final_win_size), Float32(ol)))
-            end
-            # PIV stats
-            ((x_avs, y_avs),
-            (u_avs, v_avs), 
-            (u_stds, v_stds), 
-             npts) = statistics_of_piv_pairs(raw_piv_results)
-    
-        elseif N > 2
-            image_groups = crop_and_group_images(images, crop_factor, N)
-            Threads.@threads for group in image_groups
-                for i in (1:length(group)-1)
-                    push!(raw_piv_results, JuliaPIV.main((group[i], group[i+1]), Int32(final_win_size), Float32(ol)))
-                end
-            end
-            # Explicitly setting subgroup size for clarity
-            subgroup_size = Int32(length(image_groups))
-            # PIV stats
-            ((x_avs, y_avs), 
-            (u_avs, v_avs), 
-            (u_stds, v_stds), 
-            npts) = statistics_of_piv_groups(raw_piv_results, subgroup_size)
-
-        else
-            error("N should be greater than 1")
-        end
-
-        # Format pass_sizes and group image names for .mat file
-        image_names = parse_image_names(images, N)
-        @assert length(image_names) == length(x_avs) "$(length(image_names)) != $(length(x_avs))"
-        pass_sizes = [raw_piv_results[1][3] raw_piv_results[1][3]]
-
-        println("Building $(length(x_avs)) .mat files...")
-        # Write to .mat file at argued out_dir
-        for i in eachindex(x_avs)
-            mat_dict = Dict(
-            "x" => x_avs[i],
-            "y" => y_avs[i],
-            "pass_sizes" => pass_sizes,
-            "overlap" => ol,
-            "method" => "multin",
-            "fn" => image_names[i],
-            "u" => u_avs[i],
-            "v" => v_avs[i],
-            "npts" => npts[i],
-            "uStd" => u_stds[i],
-            "vStd" => v_stds[i]
-            )
-            MAT.matwrite("$out_dir$(image_names[i]).mat", mat_dict)
-            mat_file_count += 1
-        end
-    end
-    println("Wrote $mat_file_count .mat files from $(length(batches)) batches.")
 end
 
 """
@@ -542,7 +432,7 @@ end
 """
 function parse_seven_args()
         N = parse(Int32, ARGS[1])
-
+    
         # Parse and split up crop factors
         crop_factors = split(ARGS[2], ",")
         crop_factors = [strip(crop_factor) for crop_factor in crop_factors]
@@ -558,21 +448,6 @@ function parse_seven_args()
         return N, crop_factors, final_win_size, ol, out_dir, in_path, verbose
 end
 
-"""
-    parse_eight_args()
-
-    Parse arguments from command line.
-
-    Returns:
-        - `Tuple{Int32, NTuple{4, Int32}, Int32, 
-                Float32, String, String, Int32, Int32}`: ARGS to run JuliaPIV.
-"""
-function parse_eight_args()
-    N, crop_factors, final_win_size, ol, out_dir, in_path, verbose = parse_seven_args()
-    multi_batch = parse(Int32, ARGS[8])
-    in_dir = in_path
-    return N, crop_factors, final_win_size, ol, out_dir, in_dir, verbose, multi_batch
-end
 
 """
     julia_main()::Cint
@@ -604,7 +479,7 @@ end
         - `Cint`: 0 if successful, 1 if unsuccessful.
 
 """
-function julia_main()
+function julia_main()::Cint
     # Check on ARGS
     if length(ARGS) == 7
         N, crop_factors, final_win_size, ol, out_dir, in_path, verbose = parse_seven_args()
@@ -619,20 +494,8 @@ function julia_main()
             error(e)
             return 1
         end
-    elseif length(ARGS) == 8
-        N, crop_factors, final_win_size, ol, out_dir, in_dir, verbose, multi_batch = parse_eight_args()
-        # Run PIV pipeline
-        if verbose == 0
-            og_stdout = stdout
-            redirect_stdout(devnull)
-        end
-        try 
-            io_main(N, crop_factors, final_win_size, ol, out_dir, in_dir, multi_batch)
-        catch e
-            error(e)
-            return 1
-        end
     else
+        println(ARGS)
         error("\nIncorrect number of arguments! Should be:\n-N\n-crop_factors\n-final_win_size\n-ol\n-out_dir\n-in_dir\n")
         return 1
     end
@@ -642,5 +505,4 @@ function julia_main()
     return 0
 end
 
-julia_main()
 end
