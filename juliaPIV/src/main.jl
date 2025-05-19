@@ -26,8 +26,9 @@ using Luxor            # For creating inpolygon() functionality
     ----------
 
 """
-function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32, 
-                                                    ol::Float32) where {T}
+function main(image_pair::Tuple{Matrix{T},Matrix{T}}, 
+                final_win_size::Int32, 
+                ol::Float32) where {T}
     # Convert the images to matrices of floats
     A = convert(Matrix{Float32}, image_pair[1])
     B = convert(Matrix{Float32}, image_pair[2])
@@ -61,22 +62,23 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}}, final_win_size::Int32,
     # Reject data that disagree strongly with their neighbors in a local window
     u, v = globfilt(u, v)
 
-    return ((x, y), (u, v), pass_sizes)
+    # return ((x, y), (u, v), pass_sizes)
 
-    # # Plotting stuff
-    # u_map = heatmap(u, 
-    #                 title = "u [pixels/frame]", 
-    #                 aspect_ratio = :equal, 
-    #                 limits=(0, 200), 
-    #                 xlimits=(0, 385))
+    # Plotting stuff
+    u_map = heatmap(u, 
+                    title = "u [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    limits=(0, 200), 
+                    xlimits=(0, 385))
 
-    # v_map = heatmap(v, 
-    #                 title = "v [pixels/frame]", 
-    #                 aspect_ratio = :equal, 
-    #                 ylimits=(0, 200), 
-    #                 xlimits=(0, 385))
-    # dbl_plot = plot(u_map, v_map, layout = (2, 1))
-    # png(dbl_plot, "../../tests/piv_testing/results_out.png")
+    v_map = heatmap(v, 
+                    title = "v [pixels/frame]", 
+                    aspect_ratio = :equal, 
+                    ylimits=(0, 200), 
+                    xlimits=(0, 385))
+    dbl_plot = plot(u_map, v_map, layout = (2, 1))
+    dest_dir = "/Users/robinshindelman/repos/Nearshore-Research/juliaPIV/data/2023piv/"
+    png(dbl_plot, dest_dir * "004807-004808-out.png")
 end
 
 # PASS FUNCTIONS 
@@ -1202,9 +1204,12 @@ function fast_max!(max_coords::Vector{NTuple{2, Float32}}, collection::Matrix{Fl
 end
 
 function run_test_data()
-    im1::Matrix{Gray{N0f8}} = load("data/im1.jpg")
-    im2::Matrix{Gray{N0f8}} = load("data/im2.jpg")
-    crops = (24, 2425, 1, 2048)
+    fp1 = "/Users/robinshindelman/repos/Nearshore-Research/juliaPIV/data/2023piv/A038_C002_1020WJ.004807.jpg"
+    fp2 = "/Users/robinshindelman/repos/Nearshore-Research/juliaPIV/data/2023piv/A038_C002_1020WJ.004808.jpg"
+    im1::Matrix{Gray{N0f8}} = load(fp1)
+    im2::Matrix{Gray{N0f8}} = load(fp2)
+    # crops = (24, 2425, 1, 2048)
+    crops = (1, 3072, 1, 2048)  # 2023 jpgs were uncropped
     im1 = im1[crops[3]:crops[4], crops[1]:crops[2]]
     im2 = im2[crops[3]:crops[4], crops[1]:crops[2]]
 
