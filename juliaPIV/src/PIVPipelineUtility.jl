@@ -6,10 +6,12 @@ using Statistics
 using MAT
 include("./main.jl")
 
+using ImageTransformations
+
 # Remove before compiling! -----------------------------------------------------
-const ARGS = ["3", "1, 3072, 1, 2048", "16", "0.5", 
-            "/home/server/pi/homes/shindelr/2023-test/piv-mat-out/custom-frame-verify/run4/",       # Output
-            "/home/server/pi/homes/shindelr/2023-test/custom-frame-verify-jpgs/custom-frame-verify.txt", "1"]   # Input
+const ARGS = ["2", "1, 3072, 1, 2048", "16", "0.5", 
+            "/home/server/pi/homes/shindelr/2023-test/piv-mat-out/custom-frame-verify/run7-ds0.5-n2/",       # Output
+            "/home/server/pi/homes/shindelr/2023-test/custom-frame-verify-jpgs/b1.txt", "1", "0.5"]   # Input
 
 """
     get_raw_images(path::String)::Vector{String}
@@ -46,17 +48,24 @@ end
         - `Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}`: A vector of
             tuples containing the processed images.
 """
-function crop_and_pair_images(images::Vector{String}, crop_factor::NTuple{4, Int32}
-                            )::Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}
+function crop_and_pair_images(images::Vector{String}, crop_factor::NTuple{4, Int32},
+                                downsample_factor::Float32)::Vector{Tuple{Matrix{Gray{N0f8}}, Matrix{Gray{N0f8}}}}
     # Preallocate image pair types
-    image_pairs = Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}()
+    image_pairs = Vector{Tuple{Matrix{Gray{N0f8}}, Matrix{Gray{N0f8}}}}()
     i = 1
     while i < length(images)
-        # Load images and crop
-        img1 = load(images[i])
-        img2= load(images[i+1])
+        # Load
+        img1 = Gray.(load(images[i]))
+        img2= Gray.(load(images[i+1]))
+
+        # Crop
         img1 = img1[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
         img2 = img2[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
+
+        # Downsample
+        img1 = imresize(img1, ratio=downsample_factor)
+        img2 = imresize(img2, ratio=downsample_factor)
+
         push!(image_pairs, (img1, img2))
         i += 2
     end
@@ -82,10 +91,8 @@ end
         - `Vector{Vector{Matrix{GrayN0f8}}}}}`: A vector of
             vectors containing groups of the processed images.
 """
-function crop_and_group_images(images::Vector{String}, 
-                                crop_factor::NTuple{4, Int32},
-                                N::Int32
-                                )::Vector{Vector{Matrix{Gray{N0f8}}}}
+function crop_and_group_images(images::Vector{String}, crop_factor::NTuple{4, Int32},
+                                N::Int32, downsample_factor::Float32)::Vector{Vector{Matrix{Gray{N0f8}}}}
 
     image_groups = Vector{Vector{Matrix{Gray{N0f8}}}}()
     i = 1
@@ -98,9 +105,9 @@ function crop_and_group_images(images::Vector{String},
             img_name = images[i + j - 1]
             img = load(img_name)
             img = img[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
+            img = imresize(img, ratio=downsample_factor)
             # Push images into their respective group
-            # push!(group, Gray.(img)) 
-            push!(group, img) 
+            push!(group, Gray.(img)) 
             j += 1
         end
         # Push groups into the final return vector
@@ -271,7 +278,7 @@ end
 
 """
 function paired_piv(N::T, final_win_size::T, ol::Float32, out_dir::String, 
-                    images::Vector{String}, crop_factor::Tuple{T,T,T,T}) where {T}
+                    images::Vector{String}, crop_factor::Tuple{T,T,T,T}, downsample_factor::Float32) where {T}
 
     # Preallocate results from PIV: [(x, y), (u, v), pass_sizes]
     raw_piv_results = Vector{Tuple{
@@ -280,11 +287,10 @@ function paired_piv(N::T, final_win_size::T, ol::Float32, out_dir::String,
                             Vector{Int32}
                             } where {T}}()
 
-    cropped_pairs = crop_and_pair_images(images, crop_factor)
+    cropped_pairs = crop_and_pair_images(images, crop_factor, downsample_factor)
     @assert length(cropped_pairs) == length(images) ÷ 2 "Length of cropped pairs should be half the length of images"
     image_groups_names = parse_image_names(images, N)
 
-    println("Running PIV...")
     for pair in cropped_pairs
         # Run PIV proper!
         push!(raw_piv_results, main(pair, Int32(final_win_size), Float32(ol)))
@@ -318,7 +324,7 @@ end
     Run PIV when N > 2.
 """
 function grouped_piv(N::T, final_win_size::T, ol::Float32, out_dir::String, 
-                    images::Vector{String}, crop_factor::Tuple{T,T,T,T}) where {T}
+                    images::Vector{String}, crop_factor::Tuple{T,T,T,T}, downsample_factor::Float32) where {T}
 
     # Preallocate results from PIV: [(x, y), (u, v), pass_sizes]
     raw_piv_results = Vector{Tuple{
@@ -327,7 +333,7 @@ function grouped_piv(N::T, final_win_size::T, ol::Float32, out_dir::String,
                              Vector{Int32}
                              } where {T}}()
 
-    image_groups = crop_and_group_images(images, crop_factor, N)
+    image_groups = crop_and_group_images(images, crop_factor, N, downsample_factor)
     for group in image_groups
         for i in (1:length(group)-1)
             push!(raw_piv_results, main((group[i], group[i+1]), Int32(final_win_size), Float32(ol)))
@@ -388,19 +394,19 @@ end
         None
 """
 function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
-    ol::Float32, out_dir::String, in_path::String) where {T}
+    ol::Float32, out_dir::String, in_path::String, downsample_factor::Float32) where {T}
 
     # Image pre-processing
     images = get_raw_images(in_path, N)
-    if length(images) ÷ N <= 1
+    if length(images) % N != 0
         error("\n\nNumber of images in directory ($(length(images))) not divisible by N ($N).\n\n")
     end
 
     if N == 2
-        paired_piv(N, final_win_size, ol, out_dir, images, crop_factor)
+        paired_piv(N, final_win_size, ol, out_dir, images, crop_factor, downsample_factor)
         return 
     elseif N > 2
-        grouped_piv(N, final_win_size, ol, out_dir, images, crop_factor)
+        grouped_piv(N, final_win_size, ol, out_dir, images, crop_factor, downsample_factor)
         return
     else
         error("N should be greater than 1")
@@ -408,7 +414,7 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
 end
 
 """
-    parse_seven_args()
+    parse_args()
 
     Parse arguments from command line.
 
@@ -416,7 +422,7 @@ end
         - `Tuple{Int32, NTuple{4, Int32}, Int32, 
                 Float32, String, String, Int32}`: ARGS to run JuliaPIV.
 """
-function parse_seven_args()
+function parse_args()
         N = parse(Int32, ARGS[1])
     
         # Parse and split up crop factors
@@ -431,7 +437,8 @@ function parse_seven_args()
         out_dir = ARGS[5]
         in_path = ARGS[6]
         verbose = parse(Int32, ARGS[7])
-        return N, crop_factors, final_win_size, ol, out_dir, in_path, verbose
+        downsample_factor = parse(Float32, ARGS[8])
+        return N, crop_factors, final_win_size, ol, out_dir, in_path, verbose, downsample_factor
 end
 
 
@@ -448,18 +455,18 @@ end
     .mat files will be written
     to the argued `out_dir` directory path. These .mat files will contain
     a variety of information detailed here:
-        x: [255×299 double]
-        y: [255×299 double]
-        pass_sizes: [3×2 double]
+        x: [255x299 double]
+        y: [255x299 double]
+        pass_sizes: [3x2 double]
         overlap: 0.5
             method: 'multin'
             fn: {list of jpg files}
-                u: [255×299 double]
-                v: [255×299 double]
-            npts: [255×299 double]  # number of data points that weren't NaN 
+                u: [255x299 double]
+                v: [255x299 double]
+            npts: [255x299 double]  # number of data points that weren't NaN 
                                     # prior to time-average
-            uStd: [255×299 double]  # standard deviation of the N results
-            vStd: [255×299 double]  # ditto
+            uStd: [255x299 double]  # standard deviation of the N results
+            vStd: [255x299 double]  # ditto
 
     Returns:
         - `Cint`: 0 if successful, 1 if unsuccessful.
@@ -467,22 +474,22 @@ end
 """
 function julia_main()::Cint
     # Check on ARGS
-    if length(ARGS) == 7
-        N, crop_factors, final_win_size, ol, out_dir, in_path, verbose = parse_seven_args()
+    if length(ARGS) == 8
+        N, crop_factors, final_win_size, ol, out_dir, in_path, verbose, downsample_factor = parse_args()
         if verbose == 0
             og_stdout = stdout
             redirect_stdout(devnull)
         end
         # Run PIV pipeline
         try 
-            io_main(N, crop_factors, final_win_size, ol, out_dir, in_path)
+            io_main(N, crop_factors, final_win_size, ol, out_dir, in_path, downsample_factor)
         catch e
             error(e)
             return 1
         end
     else
         println(ARGS)
-        error("\nIncorrect number of arguments! Should be:\n-N\n-crop_factors\n-final_win_size\n-ol\n-out_dir\n-in_dir\n")
+        error("Incorrect number of arguments! Should be: N crop_factors final_win_size ol out_dir in_dir downsample_factor")
         return 1
     end
     if verbose == 0
