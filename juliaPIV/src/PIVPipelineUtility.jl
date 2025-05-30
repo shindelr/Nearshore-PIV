@@ -10,8 +10,8 @@ using ImageTransformations
 
 # Remove before compiling! -----------------------------------------------------
 const ARGS = ["2", "1, 3072, 1, 2048", "16", "0.5", 
-            "/home/server/pi/homes/shindelr/2023-test/piv-mat-out/custom-frame-verify/run7-ds0.5-n2/",       # Output
-            "/home/server/pi/homes/shindelr/2023-test/custom-frame-verify-jpgs/b1.txt", "1", "0.5"]   # Input
+            "/home/server/pi/homes/shindelr/2023-test/piv-mat-out/custom-frame-verify/run8-ds1-n2/",       # Output
+            "/home/server/pi/homes/shindelr/2023-test/custom-frame-verify-jpgs/b1.txt", "1", "1.0"]   # Input
 
 """
     get_raw_images(path::String)::Vector{String}
@@ -30,47 +30,6 @@ function get_raw_images(path::String, N::Int32)::Vector{String}
     files::Vector{String} = readlines(path)
     @assert length(files) % N == 0 "Number of files in batch ($(length(files))) should be divisible by N ($(N))" 
     return files
-end
-
-"""
-    crop_and_pair_images(images::Vector{String}, 
-                        crop_factor::NTuple{4, Int32}
-                        )::Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}
-
-    Create pairs of images from a given list of images. While pairing,
-    the images are cropped and converted to Gray scale type.
-
-    Arguments:
-        - `images::Vector{String}`: Vector of image names.
-        - `crop_factor::NTuple{4, Int32}`: Tuple of 4 integers representing the 
-            cropping factor (left, right, top, bottom).
-    Returns:
-        - `Vector{Tuple{Matrix{Float32}, Matrix{Float32}}}`: A vector of
-            tuples containing the processed images.
-"""
-function crop_and_pair_images(images::Vector{String}, crop_factor::NTuple{4, Int32},
-                                downsample_factor::Float32)::Vector{Tuple{Matrix{Gray{N0f8}}, Matrix{Gray{N0f8}}}}
-    # Preallocate image pair types
-    image_pairs = Vector{Tuple{Matrix{Gray{N0f8}}, Matrix{Gray{N0f8}}}}()
-    i = 1
-    while i < length(images)
-        # Load
-        img1 = Gray.(load(images[i]))
-        img2= Gray.(load(images[i+1]))
-
-        # Crop
-        img1 = img1[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
-        img2 = img2[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
-
-        # Downsample
-        img1 = imresize(img1, ratio=downsample_factor)
-        img2 = imresize(img2, ratio=downsample_factor)
-
-        push!(image_pairs, (img1, img2))
-        i += 2
-    end
-    @assert length(image_pairs) == length(images) ÷ 2 "Length of image pairs $(length(image_pairs)) should be half the length of images $(length(images))"
-    return image_pairs
 end
 
 """
@@ -118,6 +77,7 @@ function crop_and_group_images(images::Vector{String}, crop_factor::NTuple{4, In
     @assert length(image_groups) == length(images) ÷ N "Number of groups should be $(length(images)) ÷ $N"
     return image_groups
 end
+
 
 """
     statistics_of_piv_groups(piv_results, N::Int32)
@@ -280,44 +240,45 @@ end
 function paired_piv(N::T, final_win_size::T, ol::Float32, out_dir::String, 
                     images::Vector{String}, crop_factor::Tuple{T,T,T,T}, downsample_factor::Float32) where {T}
 
-    # Preallocate results from PIV: [(x, y), (u, v), pass_sizes]
-    raw_piv_results = Vector{Tuple{
-                            Tuple{Matrix{T}, Matrix{T}}, 
-                            Tuple{Matrix{T}, Matrix{T}}, 
-                            Vector{Int32}
-                            } where {T}}()
+    for i in 1:2:length(images) - 1
+        name = replace(basename(images[i]), ".jpg" => "")
+        img1 = Gray.(load(images[i]))
+        img2= Gray.(load(images[i+1]))
 
-    cropped_pairs = crop_and_pair_images(images, crop_factor, downsample_factor)
-    @assert length(cropped_pairs) == length(images) ÷ 2 "Length of cropped pairs should be half the length of images"
-    image_groups_names = parse_image_names(images, N)
+        # Crop/Downsample
+        img1 = img1[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
+        img2 = img2[crop_factor[3]:crop_factor[4], crop_factor[1]:crop_factor[2]]
+        if downsample_factor < 1.0
+            img1 = imresize(img1, ratio=downsample_factor)
+            img2 = imresize(img2, ratio=downsample_factor)
+        end
 
-    for pair in cropped_pairs
-        # Run PIV proper!
-        push!(raw_piv_results, main(pair, Int32(final_win_size), Float32(ol)))
+        # PIV!!
+        raw_piv_results = main((img1, img2), Int32(final_win_size), Float32(ol))
+
+        println("Building .mat file --> $name")
+        pass_sizes = [raw_piv_results[3] raw_piv_results[3]]  # Just a formatting thing to match OG Matlab
+        for (i, result) in enumerate(raw_piv_results)
+            x = raw_piv_results[1][1]
+            y = raw_piv_results[1][2]
+            u = raw_piv_results[2][1]
+            v = raw_piv_results[2][2]
+            npts = isnan.(u)
+            mat_dict = Dict(
+                "x" => x,
+                "y" => y,
+                "pass_sizes" => pass_sizes,
+                "overlap" => ol,
+                "method" => "multin",
+                "fn" => name,
+                "u" => u,
+                "v" => v,
+                "npts" => npts,
+            )
+            MAT.matwrite("$out_dir/$name.mat", mat_dict)
+        end
     end
 
-    println("Building $(length(raw_piv_results)) .mat files from 1 batch...")
-    pass_sizes = [raw_piv_results[1][3] raw_piv_results[1][3]]  # Just a formatting thing to match OG Matlab
-    for (i, result) in enumerate(raw_piv_results)
-        group_name = image_groups_names[i]
-        x = result[1][1]
-        y = result[1][2]
-        u = result[2][1]
-        v = result[2][2]
-        npts = isnan.(u)
-        mat_dict = Dict(
-            "x" => x,
-            "y" => y,
-            "pass_sizes" => pass_sizes,
-            "overlap" => ol,
-            "method" => "multin",
-            "fn" => group_name,
-            "u" => u,
-            "v" => v,
-            "npts" => npts,
-        )
-        MAT.matwrite("$out_dir/$(group_name[1]).mat", mat_dict)
-    end
 end
 
 """
@@ -420,7 +381,7 @@ end
 
     Returns:
         - `Tuple{Int32, NTuple{4, Int32}, Int32, 
-                Float32, String, String, Int32}`: ARGS to run JuliaPIV.
+                Float32, String, String, Int32. Float32}`: ARGS to run JuliaPIV.
 """
 function parse_args()
         N = parse(Int32, ARGS[1])
