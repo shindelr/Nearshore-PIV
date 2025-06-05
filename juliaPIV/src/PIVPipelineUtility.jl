@@ -9,8 +9,8 @@ include("./main.jl")
 
 # # Remove before compiling! -----------------------------------------------------
 # const ARGS = ["3", "1, 3072, 1, 2048", "16", "0.5", 
-#             "/home/server/pi/homes/shindelr/2023-test/piv-mat-out/custom-frame-verify/run8-ds1-n3/",       # Output
-#             "/home/server/pi/homes/shindelr/2023-test/custom-frame-verify-jpgs/b1.txt", "1", "1.0"]   # Input
+#             "/home/server/pi/homes/shindelr/2023-test/piv-mat-out/custom-frame-verify/run10-n3-d1-saveframes/",       # Output
+#             "/home/server/pi/homes/shindelr/2023-test/custom-frame-verify-jpgs/b1.txt", "1", "0.5", "true"]   # Input
 
 """
     get_raw_images(path::String)::Vector{String}
@@ -143,32 +143,11 @@ function nan_std(arr::Vector{Matrix{Float32}})::Matrix{Float32}
 end
 
 """
-    parse_image_names(images::Vector{String}, N::Int32)::Vector{Vector{String}}
-
-    Parse a vector of image names into groups of N image names. 
-
-    Arguments:
-        - `images::Vector{String}`: Vector of image names to be 
-            parsed into groups
-        - `N::Int32`: Number of images expected to be in each group.
-    Returns:
-        - `Vector{Vector{String}}`: A vector of groups of image names.
-"""
-function parse_image_names(images::Vector{String}, N::Int32)::Vector{Vector{String}}
-    # Take just the name of the image itself and not full filepath
-    image_names = [basename(image) for image in images]
-    image_groups = Vector{Vector{String}}()
-    for group in Iterators.partition(image_names, N)
-        push!(image_groups, group)
-    end
-    return image_groups
-end
-
-"""
     Run PIV on a batch of images where N=2.
 """
 function paired_piv(N::T, final_win_size::T, ol::Float32, out_dir::String, 
-                    images::Vector{String}, crop_factor::Tuple{T,T,T,T}, downsample_factor::Float32) where {T}
+                    images::Vector{String}, crop_factor::Tuple{T,T,T,T}, 
+                    downsample_factor::Float32, save_images::Bool) where {T}
 
     for i in 1:2:length(images) - 1
         name = replace(basename(images[i]), ".jpg" => "")
@@ -181,6 +160,15 @@ function paired_piv(N::T, final_win_size::T, ol::Float32, out_dir::String,
         if downsample_factor < 1.0
             img1 = imresize(img1, ratio=downsample_factor)
             img2 = imresize(img2, ratio=downsample_factor)
+        end
+
+        if save_images
+            save_path_dir = joinpath(out_dir, "cropped-downsampled-images")
+            if !isdir(save_path_dir)
+                mkdir(save_path_dir)
+            end
+            FileIO.save(joinpath(save_path_dir, basename(images[i])), img1)
+            FileIO.save(joinpath(save_path_dir, basename(images[i+1])), img2)
         end
 
         # PIV!!
@@ -216,7 +204,8 @@ end
     Run PIV when N > 2.
 """
 function grouped_piv_memlite(N::T, final_win_size::T, ol::Float32, out_dir::String, 
-                    images::Vector{String}, crop_factor::Tuple{T,T,T,T}, downsample_factor::Float32) where {T}
+                    images::Vector{String}, crop_factor::Tuple{T,T,T,T}, 
+                    downsample_factor::Float32, save_images::Bool) where {T}
 
     for i in 1:N:length(images) - 1
         name = replace(basename(images[i]), ".jpg" => "")
@@ -230,6 +219,15 @@ function grouped_piv_memlite(N::T, final_win_size::T, ol::Float32, out_dir::Stri
                 img = imresize(img, ratio=downsample_factor)
             end
             push!(img_subset, img)
+
+            # Save images if desired
+            if save_images
+                save_path_dir = joinpath(out_dir, "cropped-downsampled-images")
+                if !isdir(save_path_dir)
+                    mkdir(save_path_dir)
+                end
+                FileIO.save(joinpath(save_path_dir, basename(images[i+j-1])), img)
+            end
         end
 
         # Preallocate results from PIV: [(x, y), (u, v), pass_sizes]
@@ -288,7 +286,8 @@ end
         None
 """
 function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
-    ol::Float32, out_dir::String, in_path::String, downsample_factor::Float32) where {T}
+    ol::Float32, out_dir::String, in_path::String, downsample_factor::Float32, 
+    save_images::Bool) where {T}
 
     # Image pre-processing
     images = get_raw_images(in_path, N)
@@ -297,11 +296,11 @@ function io_main(N::T, crop_factor::Tuple{T,T,T,T}, final_win_size::T,
     end
 
     if N == 2
-        paired_piv(N, final_win_size, ol, out_dir, images, crop_factor, downsample_factor)
+        paired_piv(N, final_win_size, ol, out_dir, images, crop_factor, downsample_factor, save_images)
         return 
     elseif N > 2
         # grouped_piv(N, final_win_size, ol, out_dir, images, crop_factor, downsample_factor)
-        grouped_piv_memlite(N, final_win_size, ol, out_dir, images, crop_factor, downsample_factor)
+        grouped_piv_memlite(N, final_win_size, ol, out_dir, images, crop_factor, downsample_factor, save_images)
         return
     else
         error("N should be greater than 1")
@@ -333,9 +332,9 @@ function parse_args()
         in_path = ARGS[6]
         verbose = parse(Int32, ARGS[7])
         downsample_factor = parse(Float32, ARGS[8])
-        return N, crop_factors, final_win_size, ol, out_dir, in_path, verbose, downsample_factor
+        save_images = parse(Bool, ARGS[9])
+        return N, crop_factors, final_win_size, ol, out_dir, in_path, verbose, downsample_factor, save_images
 end
-
 
 """
     julia_main()::Cint
@@ -369,15 +368,15 @@ end
 """
 function julia_main()::Cint
     # Check on ARGS
-    if length(ARGS) == 8
-        N, crop_factors, final_win_size, ol, out_dir, in_path, verbose, downsample_factor = parse_args()
+    if length(ARGS) == 9
+        N, crop_factors, final_win_size, ol, out_dir, in_path, verbose, downsample_factor, save_images = parse_args()
         if verbose == 0
             og_stdout = stdout
             redirect_stdout(devnull)
         end
         # Run PIV pipeline
         try 
-            io_main(N, crop_factors, final_win_size, ol, out_dir, in_path, downsample_factor)
+            io_main(N, crop_factors, final_win_size, ol, out_dir, in_path, downsample_factor, save_images)
         catch e
             error(e)
             return 1
