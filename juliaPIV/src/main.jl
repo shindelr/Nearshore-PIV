@@ -77,8 +77,8 @@ function main(image_pair::Tuple{Matrix{T},Matrix{T}},
                     ylimits=(0, 200), 
                     xlimits=(0, 385))
     dbl_plot = plot(u_map, v_map, layout = (2, 1))
-    dest_dir = "/Users/robinshindelman/repos/Nearshore-Research/juliaPIV/data/2023piv/"
-    png(dbl_plot, dest_dir * "004807-004808-out.png")
+    dest_dir = "/home/server/pi/homes/shindelr/2025-06-27-fligh1-error-testing"
+    png(dbl_plot, dest_dir * "037047-037048-out.png")
 end
 
 # PASS FUNCTIONS 
@@ -1204,8 +1204,8 @@ function fast_max!(max_coords::Vector{NTuple{2, Float32}}, collection::Matrix{Fl
 end
 
 function run_test_data()
-    fp1 = "/Users/robinshindelman/repos/Nearshore-Research/juliaPIV/data/2023piv/A038_C002_1020WJ.004807.jpg"
-    fp2 = "/Users/robinshindelman/repos/Nearshore-Research/juliaPIV/data/2023piv/A038_C002_1020WJ.004808.jpg"
+    fp1 = "/home/server/pi/homes/shindelr/Nearshore-PIV/juliaPIV/data/A044_C001_020824.037047.jpg"
+    fp2 = "/home/server/pi/homes/shindelr/Nearshore-PIV/juliaPIV/data/A044_C001_020824.037048.jpg"
     im1::Matrix{Gray{N0f8}} = load(fp1)
     im2::Matrix{Gray{N0f8}} = load(fp2)
     # crops = (24, 2425, 1, 2048)

@@ -8,9 +8,9 @@ using ImageTransformations
 include("./main.jl")
 
 # # Remove before compiling! -----------------------------------------------------
-# const ARGS = ["3", "1, 3072, 1, 2048", "16", "0.5", 
-#             "/home/server/pi/homes/shindelr/2023-test/piv-mat-out/custom-frame-verify/run10-n3-d1-saveframes/",       # Output
-#             "/home/server/pi/homes/shindelr/2023-test/custom-frame-verify-jpgs/b1.txt", "1", "0.5", "true"]   # Input
+# const ARGS = ["3", "1, 6144, 1, 3240", "16", "0.5", 
+#             "/home/server/pi/homes/shindelr/2025-06-27-fligh1-error-testing/piv_mat_out",       # Output
+#             "/home/server/pi/homes/shindelr/2025-06-27-fligh1-error-testing/piv_batches/batch25.txt", "1", "0.5", "false"]   # Input
 
 """
     get_raw_images(path::String)::Vector{String}
@@ -172,28 +172,36 @@ function paired_piv(N::T, final_win_size::T, ol::Float32, out_dir::String,
         end
 
         # PIV!!
-        raw_piv_results = main((img1, img2), Int32(final_win_size), Float32(ol))
-
-        println("Building .mat file --> $name")
-        pass_sizes = [raw_piv_results[3] raw_piv_results[3]]  # Just a formatting thing to match OG Matlab
-        for (i, result) in enumerate(raw_piv_results)
-            x = raw_piv_results[1][1]
-            y = raw_piv_results[1][2]
-            u = raw_piv_results[2][1]
-            v = raw_piv_results[2][2]
-            npts = isnan.(u)
-            mat_dict = Dict(
-                "x" => x,
-                "y" => y,
-                "pass_sizes" => pass_sizes,
-                "overlap" => ol,
-                "method" => "multin",
-                "fn" => name,
-                "u" => u,
-                "v" => v,
-                "npts" => npts,
-            )
-            MAT.matwrite("$out_dir/$name.mat", mat_dict)
+        try
+            raw_piv_results = main((img1, img2), Int32(final_win_size), Float32(ol))
+            println("Building .mat file --> $name")
+            pass_sizes = [raw_piv_results[3] raw_piv_results[3]]  # Just a formatting thing to match OG Matlab
+            for (i, result) in enumerate(raw_piv_results)
+                x = raw_piv_results[1][1]
+                y = raw_piv_results[1][2]
+                u = raw_piv_results[2][1]
+                v = raw_piv_results[2][2]
+                npts = isnan.(u)
+                mat_dict = Dict(
+                    "x" => x,
+                    "y" => y,
+                    "pass_sizes" => pass_sizes,
+                    "overlap" => ol,
+                    "method" => "multin",
+                    "fn" => name,
+                    "u" => u,
+                    "v" => v,
+                    "npts" => npts,
+                )
+                MAT.matwrite("$out_dir/$name.mat", mat_dict)
+            end
+        catch e
+            if isa(e, DimensionMismatch)
+                @warn "Skipping because of dimension mismatch: $name"
+                continue
+            else
+                throw(e)
+            end
         end
     end
 
@@ -229,40 +237,48 @@ function grouped_piv_memlite(N::T, final_win_size::T, ol::Float32, out_dir::Stri
                 FileIO.save(joinpath(save_path_dir, basename(images[i+j-1])), img)
             end
         end
+        try
+            # Preallocate results from PIV: [(x, y), (u, v), pass_sizes]
+            raw_piv_results = Vector{Tuple{
+                                Tuple{Matrix{T}, Matrix{T}}, 
+                                Tuple{Matrix{T}, Matrix{T}}, 
+                                Vector{Int32}
+                                } where {T}}()
+            for i in (1:length(img_subset) - 1)
+                push!(raw_piv_results, main((img_subset[i], img_subset[i+1]), Int32(final_win_size), Float32(ol)))
+            end
 
-        # Preallocate results from PIV: [(x, y), (u, v), pass_sizes]
-        raw_piv_results = Vector{Tuple{
-                             Tuple{Matrix{T}, Matrix{T}}, 
-                             Tuple{Matrix{T}, Matrix{T}}, 
-                             Vector{Int32}
-                             } where {T}}()
-        for i in (1:length(img_subset) - 1)
-            push!(raw_piv_results, main((img_subset[i], img_subset[i+1]), Int32(final_win_size), Float32(ol)))
+            # PIV stats
+            ((x, y),
+            (u_av, v_av),
+            (u_std, v_std), 
+            npts) = statistics_of_piv_groups_memlite(raw_piv_results, N)
+
+            println("Building .mat file --> $name")
+            pass_sizes = [raw_piv_results[1][3] raw_piv_results[1][3]]  # Just a formatting thing to match OG Matlab
+            npts = isnan.(u_av)
+            mat_dict = Dict(
+                "x" => x,
+                "y" => y,
+                "pass_sizes" => pass_sizes,
+                "overlap" => ol,
+                "method" => "multin",
+                "fn" => name,
+                "u" => u_av,
+                "v" => v_av,
+                "ustd" => u_std,
+                "vstd" => v_std,
+                "npts" => npts,
+            )
+            MAT.matwrite("$out_dir/$name.mat", mat_dict)
+        catch e
+            if isa(e, DimensionMismatch)
+                @warn "Skipping because of dimension mismatch: $name"
+                continue
+            else
+                throw(e)
+            end
         end
-
-        # PIV stats
-        ((x, y),
-        (u_av, v_av),
-        (u_std, v_std), 
-        npts) = statistics_of_piv_groups_memlite(raw_piv_results, N)
-
-        println("Building .mat file --> $name")
-        pass_sizes = [raw_piv_results[1][3] raw_piv_results[1][3]]  # Just a formatting thing to match OG Matlab
-        npts = isnan.(u_av)
-        mat_dict = Dict(
-            "x" => x,
-            "y" => y,
-            "pass_sizes" => pass_sizes,
-            "overlap" => ol,
-            "method" => "multin",
-            "fn" => name,
-            "u" => u_av,
-            "v" => v_av,
-            "ustd" => u_std,
-            "vstd" => v_std,
-            "npts" => npts,
-        )
-        MAT.matwrite("$out_dir/$name.mat", mat_dict)
     end
 end
 
