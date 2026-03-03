@@ -10,14 +10,12 @@ matlabPIV/
 .venv/
 .vscode/
 greg_utilities/
-PIVPipelineUtility/
 piv_build/
 piv_build.zip
 tests/gpu_tests
 pipeline_utility_testing/
 matlabPIV/
 /home/server/pi/homes/shindelr/Nearshore-PIV/tests/pipeline_utility_testing
-latest-release/
 linux-release/
 tests/
 v1.0.0-ARM.zip
